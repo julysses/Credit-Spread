@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 6%;
+    --foreground: 210 20% 95%;
+    --card: 220 20% 8%;
+    --card-foreground: 210 20% 95%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 15% 14%;
+    --secondary-foreground: 210 40% 95%;
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 221 83% 53%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 142 72% 42%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 90% 50%;
+    --warning-foreground: 220 15% 8%;
+    --border: 220 15% 15%;
+    --input: 220 15% 12%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-[#060b14] text-foreground antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0f1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
+
+/* Recharts customization */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #111827;
+}
+
+/* Font mono */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+}
+
+/* Glow effects for key metrics */
+.text-green-400 { text-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
+.text-red-400 { text-shadow: 0 0 10px rgba(248, 113, 113, 0.2); }
+.text-blue-400 { text-shadow: 0 0 10px rgba(96, 165, 250, 0.2); }
+
+/* Tab transitions */
+.tab-content-enter {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.tab-content-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms, transform 200ms;
+}

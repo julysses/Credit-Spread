@@ -1,0 +1,50 @@
+# SPX Signal Desk — Fly.io Configuration
+# Deploy with: fly deploy
+
+app = "spx-signal-desk"
+primary_region = "iad"  # US East (closest to NYSE)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  NEXT_TELEMETRY_DISABLED = "1"
+  PORT = "3000"
+
+# Set these secrets with: fly secrets set KEY=value
+# fly secrets set DATABASE_URL="postgresql://..."
+# fly secrets set TRADIER_API_KEY="..."
+# fly secrets set ALPHA_VANTAGE_API_KEY="..."
+# fly secrets set NEWS_API_KEY="..."
+# fly secrets set ANTHROPIC_API_KEY="..."
+# fly secrets set OPENAI_API_KEY="..."
+# fly secrets set TWILIO_ACCOUNT_SID="..."
+# fly secrets set TWILIO_AUTH_TOKEN="..."
+# fly secrets set TWILIO_PHONE_FROM="..."
+# fly secrets set SENDGRID_API_KEY="..."
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 100
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+# Health check
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/api/market"
