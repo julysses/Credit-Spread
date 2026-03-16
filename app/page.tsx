@@ -9,15 +9,14 @@ import { TradeJournal } from '@/components/dashboard/TradeJournal';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { AnalyticsChart } from '@/components/charts/AnalyticsChart';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 type Tab = 'dashboard' | 'analytics' | 'journal' | 'simulator';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 interface DashboardState {
   loading: boolean;
   error: string | null;
   strategy: any;
-  market: any;
   analytics: any;
   trades: any;
   monteCarlo: any;
@@ -30,7 +29,6 @@ export default function DashboardPage() {
     loading: true,
     error: null,
     strategy: null,
-    market: null,
     analytics: null,
     trades: null,
     monteCarlo: null,
@@ -39,7 +37,7 @@ export default function DashboardPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      setState(s => ({ ...s, loading: true, error: null }));
+      setState((s: DashboardState) => ({ ...s, loading: true, error: null }));
 
       const [stratRes, analyticsRes, tradesRes] = await Promise.all([
         fetch('/api/strategy').then(r => r.json()),
@@ -74,20 +72,24 @@ export default function DashboardPage() {
         loading: false,
         error: null,
         strategy: stratRes?.data,
-        market: stratRes?.data,
         analytics: analyticsRes?.data,
         trades: tradesRes?.data,
         monteCarlo: mcData,
-        lastUpdated: new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ET',
+        lastUpdated: new Date().toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }) + ' ET',
       });
     } catch (err) {
-      setState(s => ({ ...s, loading: false, error: String(err) }));
+      setState((s: DashboardState) => ({ ...s, loading: false, error: String(err) }));
     }
   }, []);
 
   useEffect(() => {
     fetchAll();
-    const interval = setInterval(fetchAll, 60000); // Refresh every 60s
+    const interval = setInterval(fetchAll, 60000);
     return () => clearInterval(interval);
   }, [fetchAll]);
 
@@ -124,7 +126,7 @@ export default function DashboardPage() {
         <div className="text-center">
           <div className="w-12 h-12 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <div className="text-gray-400 text-sm">Loading SPX Signal Desk...</div>
-          <div className="text-gray-600 text-xs mt-1">Running models & fetching data</div>
+          <div className="text-gray-600 text-xs mt-1">Running models &amp; fetching data</div>
         </div>
       </div>
     );
@@ -140,12 +142,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#060b14]">
       {/* Header */}
       <MarketHeader
-        spxPrice={conditions?.spxPrice || 5800}
-        spxChangePct={conditions?.spxDailyChange || 0}
-        vix={conditions?.vix || 18}
+        spxPrice={conditions?.spxPrice ?? 5800}
+        spxChangePct={conditions?.spxDailyChange ?? 0}
+        vix={conditions?.vix ?? 18}
         vixChangePct={0}
-        vixRegime={conditions?.vixRegime || 'moderate'}
-        riskLevel={conditions?.riskLevel || 'moderate'}
+        vixRegime={conditions?.vixRegime ?? 'moderate'}
+        riskLevel={conditions?.riskLevel ?? 'moderate'}
         isMarketOpen={false}
         lastUpdated={state.lastUpdated}
       />
@@ -154,12 +156,14 @@ export default function DashboardPage() {
       <div className="border-b border-gray-800/60 bg-gray-950/50 sticky top-[61px] z-40">
         <div className="max-w-screen-2xl mx-auto px-4">
           <div className="flex items-center gap-1">
-            {([
-              { id: 'dashboard', label: 'Dashboard' },
-              { id: 'analytics', label: 'Analytics' },
-              { id: 'journal', label: 'Trade Journal' },
-              { id: 'simulator', label: 'Monte Carlo' },
-            ] as { id: Tab; label: string }[]).map(t => (
+            {(
+              [
+                { id: 'dashboard', label: 'Dashboard' },
+                { id: 'analytics', label: 'Analytics' },
+                { id: 'journal', label: 'Trade Journal' },
+                { id: 'simulator', label: 'Monte Carlo' },
+              ] as { id: Tab; label: string }[]
+            ).map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -192,7 +196,6 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-screen-2xl mx-auto px-4 py-6">
-
         {state.error && (
           <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-400 text-sm">
             {state.error}
@@ -202,19 +205,16 @@ export default function DashboardPage() {
         {/* DASHBOARD TAB */}
         {tab === 'dashboard' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
             {/* Left Column */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Morning Brief */}
               {brief && (
                 <MorningBrief
                   brief={brief}
-                  tradeabilityScore={news?.tradeabilityScore || 70}
-                  newsItems={news?.items || []}
+                  tradeabilityScore={news?.tradeabilityScore ?? 70}
+                  newsItems={news?.items ?? []}
                 />
               )}
 
-              {/* Trade Card */}
               {rec && (
                 <TradeCard
                   strategy={rec.strategy}
@@ -223,30 +223,29 @@ export default function DashboardPage() {
                   longLeg={rec.longLeg}
                   shortLeg2={rec.shortLeg2}
                   longLeg2={rec.longLeg2}
-                  credit={rec.credit || 0}
-                  maxProfit={rec.maxProfit || 0}
-                  maxLoss={rec.maxLoss || 0}
-                  probOfProfit={rec.probOfProfit || 0}
-                  probOfTouch={rec.probOfTouch || 0}
-                  expectedValue={rec.expectedValue || 0}
-                  kellySize={rec.kellySize || 0}
-                  profitTarget={rec.profitTarget || 0}
-                  stopLoss={rec.stopLoss || 0}
-                  daysToExpiry={rec.daysToExpiry || 7}
-                  expiryDate={rec.expiryDate || ''}
-                  confidence={rec.confidence || 'medium'}
-                  warnings={rec.warnings || []}
-                  conditions={rec.conditions || []}
+                  credit={rec.credit ?? 0}
+                  maxProfit={rec.maxProfit ?? 0}
+                  maxLoss={rec.maxLoss ?? 0}
+                  probOfProfit={rec.probOfProfit ?? 0}
+                  probOfTouch={rec.probOfTouch ?? 0}
+                  expectedValue={rec.expectedValue ?? 0}
+                  kellySize={rec.kellySize ?? 0}
+                  profitTarget={rec.profitTarget ?? 0}
+                  stopLoss={rec.stopLoss ?? 0}
+                  daysToExpiry={rec.daysToExpiry ?? 7}
+                  expiryDate={rec.expiryDate ?? ''}
+                  confidence={rec.confidence ?? 'medium'}
+                  warnings={rec.warnings ?? []}
+                  conditions={rec.conditions ?? []}
                   onAcceptTrade={handleAcceptTrade}
                 />
               )}
 
-              {/* Monte Carlo Chart */}
               {state.monteCarlo && rec?.tradeType !== 'no_trade' && (
                 <MonteCarloChart
-                  paths={state.monteCarlo.paths || []}
-                  histogram={state.monteCarlo.histogram || []}
-                  spotPrice={conditions?.spxPrice || 5800}
+                  paths={state.monteCarlo.paths ?? []}
+                  histogram={state.monteCarlo.histogram ?? []}
+                  spotPrice={conditions?.spxPrice ?? 5800}
                   shortStrike={rec?.shortLeg?.strike}
                   longStrike={rec?.longLeg?.strike}
                   percentile5={state.monteCarlo.summary?.percentile5}
@@ -259,7 +258,6 @@ export default function DashboardPage() {
 
             {/* Right Column */}
             <div className="space-y-6">
-              {/* Market Regime */}
               {conditions && (
                 <MarketRegimeCard
                   vix={conditions.vix}
@@ -267,8 +265,16 @@ export default function DashboardPage() {
                   ivRank={conditions.ivRank}
                   impliedVol={conditions.impliedVol}
                   realizedVol={conditions.realizedVol}
-                  expectedMove7d={0.18 * conditions.spxPrice * Math.sqrt(7 / 365)}
-                  expectedMove30d={0.18 * conditions.spxPrice * Math.sqrt(30 / 365)}
+                  expectedMove7d={
+                    (conditions.impliedVol ?? 0.18) *
+                    (conditions.spxPrice ?? 5800) *
+                    Math.sqrt(7 / 365)
+                  }
+                  expectedMove30d={
+                    (conditions.impliedVol ?? 0.18) *
+                    (conditions.spxPrice ?? 5800) *
+                    Math.sqrt(30 / 365)
+                  }
                   directionalBias={conditions.directionalBias}
                   marketRegime={conditions.marketRegime}
                   riskLevel={conditions.riskLevel}
@@ -276,31 +282,36 @@ export default function DashboardPage() {
                 />
               )}
 
-              {/* SOP Rules */}
               <InstitutionalSOP />
-
-              {/* TradingView Widget */}
               <TradingViewWidget />
             </div>
           </div>
         )}
 
-        {/* ANALYTICS TAB */}
         {tab === 'analytics' && state.analytics && (
           <AnalyticsChart data={state.analytics} />
         )}
 
-        {/* JOURNAL TAB */}
         {tab === 'journal' && state.trades && (
           <TradeJournal
-            trades={state.trades.trades || []}
-            summary={state.trades.summary || { openTrades: 0, closedTrades: 0, totalPnl: 0, winRate: 0, openExposure: 0 }}
+            trades={state.trades.trades ?? []}
+            summary={
+              state.trades.summary ?? {
+                openTrades: 0,
+                closedTrades: 0,
+                totalPnl: 0,
+                winRate: 0,
+                openExposure: 0,
+              }
+            }
           />
         )}
 
-        {/* SIMULATOR TAB */}
         {tab === 'simulator' && (
-          <MonteCarloSimulator spxPrice={conditions?.spxPrice || 5800} iv={conditions?.impliedVol || 0.18} />
+          <MonteCarloSimulator
+            spxPrice={conditions?.spxPrice ?? 5800}
+            iv={conditions?.impliedVol ?? 0.18}
+          />
         )}
       </main>
     </div>
@@ -353,7 +364,7 @@ function TradingViewWidget() {
       <CardContent className="p-0">
         <div className="relative" style={{ height: 300 }}>
           <iframe
-            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_spx&symbol=SP%3ASPX&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&studies_overrides=%7B%7D&overrides=%7B%22paneProperties.background%22%3A%22%231a1f2e%22%7D&enabled_features=[]&disabled_features=[]&locale=en&utm_source=localhost&utm_medium=widget"
+            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_spx&symbol=SP%3ASPX&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&locale=en"
             style={{ width: '100%', height: '100%', border: 'none', borderRadius: '0 0 12px 12px' }}
             allowFullScreen
             title="SPX Chart"
@@ -445,8 +456,8 @@ function MonteCarloSimulator({ spxPrice, iv }: { spxPrice: number; iv: number })
       {results && (
         <>
           <MonteCarloChart
-            paths={results.paths || []}
-            histogram={results.histogram || []}
+            paths={results.paths ?? []}
+            histogram={results.histogram ?? []}
             spotPrice={parseFloat(params.spotPrice)}
             shortStrike={parseFloat(params.shortStrike)}
             longStrike={parseFloat(params.shortStrike) - 10}
@@ -464,7 +475,7 @@ function MonteCarloSimulator({ spxPrice, iv }: { spxPrice: number; iv: number })
                   <ResultStat label="Prob of Profit" value={`${(results.spreadProbabilities.probProfit * 100).toFixed(1)}%`} color="text-green-400" />
                   <ResultStat label="Prob of Touch" value={`${(results.spreadProbabilities.probTouchStrike * 100).toFixed(1)}%`} color="text-orange-400" />
                   <ResultStat label="Expected Value" value={`$${results.spreadProbabilities.expectedValue.toFixed(2)}`} color={results.spreadProbabilities.expectedValue >= 0 ? 'text-green-400' : 'text-red-400'} />
-                  <ResultStat label="Mean Price" value={results.summary?.meanPrice?.toFixed(0)} color="text-blue-400" />
+                  <ResultStat label="Mean Price" value={results.summary?.meanPrice?.toFixed(0) ?? '--'} color="text-blue-400" />
                 </div>
               </CardContent>
             </Card>
@@ -475,7 +486,15 @@ function MonteCarloSimulator({ spxPrice, iv }: { spxPrice: number; iv: number })
   );
 }
 
-function ParamInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ParamInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div>
       <label className="text-xs text-gray-500 block mb-1">{label}</label>
@@ -489,7 +508,15 @@ function ParamInput({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-function ResultStat({ label, value, color }: { label: string; value: string; color: string }) {
+function ResultStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
   return (
     <div className="bg-gray-800/40 rounded-lg p-3 text-center">
       <div className="text-xs text-gray-500 mb-1">{label}</div>

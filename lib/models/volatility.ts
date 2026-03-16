@@ -4,7 +4,7 @@
  * Institutional-grade implementation
  */
 
-import { impliedVolatility, normalCDF } from './black-scholes';
+import { impliedVolatility } from './black-scholes';
 
 export interface OptionQuote {
   strike: number;

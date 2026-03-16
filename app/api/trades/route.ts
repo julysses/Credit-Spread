@@ -116,10 +116,10 @@ export async function POST(req: NextRequest) {
     demoTrades.push(trade);
 
     return NextResponse.json({ success: true, data: trade }, { status: 201 });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ success: false, error: error.errors }, { status: 400 });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ success: false, error: err.errors }, { status: 400 });
     }
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+    return NextResponse.json({ success: false, error: String(err) }, { status: 500 });
   }
 }
