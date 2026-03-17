@@ -386,7 +386,7 @@ function VIXWidget() {
       <CardContent className="p-0">
         <div className="relative" style={{ height: 300 }}>
           <iframe
-            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_vix&symbol=CBOE%3AVIX&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&locale=en"
+            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_vix&symbol=TVC%3AVIX&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&locale=en"
             style={{ width: '100%', height: '100%', border: 'none', borderRadius: '0 0 12px 12px' }}
             allowFullScreen
             title="VIX Chart"
