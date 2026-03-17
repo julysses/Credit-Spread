@@ -100,6 +100,7 @@ export async function GET(req: NextRequest) {
         brief,
         news: newsAnalysis,
         conditions,
+        snapshot: { isMarketOpen: snapshot.isMarketOpen },
       },
       timestamp: Date.now(),
     });

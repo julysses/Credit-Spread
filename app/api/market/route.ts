@@ -8,8 +8,9 @@ export const revalidate = 60; // 60 second cache
 
 export async function GET() {
   try {
-    const hasApiKeys = !!(process.env.TRADIER_API_KEY || process.env.ALPHA_VANTAGE_API_KEY);
-    const snapshot = hasApiKeys ? await fetchMarketSnapshot() : getMockMarketData();
+    const snapshot = process.env.MARKETDATA_API_KEY
+      ? await fetchMarketSnapshot()
+      : getMockMarketData();
 
     const { spx, vix, optionChain } = snapshot;
     const riskFreeRate = 0.05;

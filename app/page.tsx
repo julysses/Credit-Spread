@@ -148,7 +148,7 @@ export default function DashboardPage() {
         vixChangePct={0}
         vixRegime={conditions?.vixRegime ?? 'moderate'}
         riskLevel={conditions?.riskLevel ?? 'moderate'}
-        isMarketOpen={false}
+        isMarketOpen={state.strategy?.snapshot?.isMarketOpen ?? false}
         lastUpdated={state.lastUpdated}
       />
 
