@@ -12,6 +12,11 @@ interface SpreadLeg {
   premium: number;
 }
 
+interface NoTradeEvent {
+  name: string;
+  sources: { headline: string; url: string }[];
+}
+
 interface TradeCardProps {
   strategy: string;
   tradeType: string;
@@ -33,6 +38,7 @@ interface TradeCardProps {
   confidence: string;
   warnings: string[];
   conditions: string[];
+  noTradeEvent?: NoTradeEvent;
   onAcceptTrade?: () => void;
 }
 
@@ -57,9 +63,13 @@ export function TradeCard({
   confidence,
   warnings,
   conditions,
+  noTradeEvent,
   onAcceptTrade,
 }: TradeCardProps) {
   if (tradeType === 'no_trade') {
+    const eventName = noTradeEvent?.name ?? 'Macro Event';
+    const sources = noTradeEvent?.sources ?? [];
+
     return (
       <Card className="border-yellow-800/40">
         <CardHeader>
@@ -68,14 +78,46 @@ export function TradeCard({
             <Badge variant="warning">NO TRADE</Badge>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 text-center">
             <div className="text-3xl mb-2">⛔</div>
-            <div className="text-yellow-400 font-semibold">Standing Aside</div>
-            <div className="text-sm text-gray-400 mt-1">Macro event day — per institutional SOP Rule 3</div>
+            <div className="text-yellow-400 font-semibold text-lg">Standing Aside</div>
+            <div className="text-sm text-gray-300 mt-1 font-medium">{eventName}</div>
+            <div className="text-xs text-gray-500 mt-0.5">per institutional SOP Rule 3</div>
           </div>
+
+          {sources.length > 0 && (
+            <div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Triggering News</div>
+              <div className="space-y-2">
+                {sources.map((s, i) => (
+                  s.url && s.url !== '#'
+                    ? (
+                      <a
+                        key={i}
+                        href={s.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-start gap-2 text-xs text-blue-400 hover:text-blue-300 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-800/30 rounded px-3 py-2 transition-colors"
+                      >
+                        <span className="mt-0.5 shrink-0">📰</span>
+                        <span className="line-clamp-2">{s.headline}</span>
+                        <span className="shrink-0 text-gray-600">↗</span>
+                      </a>
+                    )
+                    : (
+                      <div key={i} className="flex items-start gap-2 text-xs text-gray-400 bg-gray-800/40 rounded px-3 py-2">
+                        <span className="mt-0.5 shrink-0">📰</span>
+                        <span className="line-clamp-2">{s.headline}</span>
+                      </div>
+                    )
+                ))}
+              </div>
+            </div>
+          )}
+
           {warnings.map((w, i) => (
-            <div key={i} className="mt-2 text-xs text-yellow-400 bg-yellow-500/10 rounded px-3 py-2">{w}</div>
+            <div key={i} className="text-xs text-yellow-400 bg-yellow-500/10 rounded px-3 py-2">{w}</div>
           ))}
         </CardContent>
       </Card>

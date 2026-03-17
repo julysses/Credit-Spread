@@ -88,6 +88,12 @@ export async function GET(req: NextRequest) {
 
     const decision = runStrategyEngine(conditions);
 
+    // If standing aside, attach the specific event that triggered it
+    if (decision.recommendation?.tradeType === 'no_trade' && conditions.isMacroEventDay) {
+      const macroEvent = detectMacroEvent(newsAnalysis);
+      (decision.recommendation as unknown as Record<string, unknown>).noTradeEvent = macroEvent;
+    }
+
     // Import here to avoid circular
     const { generateMorningBrief } = await import('@/server/ai-briefing');
     const brief = await generateMorningBrief(snapshot, newsAnalysis, decision);
@@ -119,4 +125,39 @@ function getCurrentTimeHHMM(): number {
   const now = new Date();
   const ny = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   return ny.getHours() * 100 + ny.getMinutes();
+}
+
+interface MacroEventInfo {
+  name: string;
+  sources: { headline: string; url: string }[];
+}
+
+function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: string; url: string; macroRelevance: boolean; riskImpact: string }[]; keyRisks: string[] }): MacroEventInfo {
+  const macroItems = newsAnalysis.items.filter(
+    i => i.macroRelevance && i.riskImpact === 'high'
+  );
+
+  const sources = macroItems.slice(0, 3).map(i => ({
+    headline: i.headline,
+    url: i.url,
+  }));
+
+  // Detect event type from headlines + summaries
+  const text = macroItems
+    .map(i => `${i.headline} ${i.summary}`)
+    .join(' ')
+    .toLowerCase();
+
+  let name = 'Macro Event';
+  if (/fomc|federal reserve|fed meeting|rate decision|rate hike|rate cut/.test(text)) name = 'FOMC Rate Decision';
+  else if (/cpi|consumer price index|inflation report/.test(text)) name = 'CPI Release';
+  else if (/nfp|nonfarm payroll|jobs report|employment report/.test(text)) name = 'NFP Jobs Report';
+  else if (/\bgdp\b|gross domestic product/.test(text)) name = 'GDP Release';
+  else if (/ppi|producer price/.test(text)) name = 'PPI Release';
+  else if (/pce|personal consumption expenditure/.test(text)) name = 'PCE Release';
+  else if (/earnings|quarterly results|earning season/.test(text)) name = 'Earnings Risk';
+  else if (/debt ceiling|government shutdown|fiscal cliff/.test(text)) name = 'Fiscal Event';
+  else if (/geopolit|war|sanctions|military|conflict/.test(text)) name = 'Geopolitical Event';
+
+  return { name, sources };
 }

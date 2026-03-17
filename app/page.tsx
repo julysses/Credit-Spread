@@ -237,6 +237,7 @@ export default function DashboardPage() {
                   confidence={rec.confidence ?? 'medium'}
                   warnings={rec.warnings ?? []}
                   conditions={rec.conditions ?? []}
+                  noTradeEvent={rec.noTradeEvent}
                   onAcceptTrade={handleAcceptTrade}
                 />
               )}
