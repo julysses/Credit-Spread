@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
 import { analyzeNews, getMockNewsAnalysis } from '@/server/news-analyzer';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
 import { classifyVIXRegime, computeVolatilitySkew, buildVolatilitySurface } from '@/lib/models/volatility';
@@ -10,10 +10,14 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const useMock = url.searchParams.get('mock') === 'true' || !process.env.TRADIER_API_KEY;
+    const useMock = url.searchParams.get('mock') === 'true';
 
-    const snapshot = getMockMarketData(); // Always use mock for demo reliability
-    const newsAnalysis = useMock ? getMockNewsAnalysis() : await analyzeNews();
+    const snapshot = useMock || !process.env.MARKETDATA_API_KEY
+      ? getMockMarketData()
+      : await fetchMarketSnapshot();
+    const newsAnalysis = useMock || !process.env.GNEWS_API_KEY
+      ? getMockNewsAnalysis()
+      : await analyzeNews();
 
     const { spx, vix } = snapshot;
     const impliedVol = vix.price / 100;

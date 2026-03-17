@@ -3,9 +3,10 @@
  * Scans for trade setups every 5 minutes during market hours
  */
 
-import { getMockMarketData } from '../server/market-data';
+import { fetchMarketSnapshot, getMockMarketData } from '../server/market-data';
 import { runStrategyEngine, selectStrategy, MarketConditions } from '../lib/models/strategy-engine';
 import { classifyVIXRegime } from '../lib/models/volatility';
+import { dispatchAlert, formatTradeAlert } from './alert-system';
 
 function isMarketHours(): boolean {
   const now = new Date();
@@ -17,6 +18,47 @@ function isMarketHours(): boolean {
   return day >= 1 && day <= 5 && timeNum >= 930 && timeNum < 1600;
 }
 
+async function sendTradeAlert(strategy: string, decision: ReturnType<typeof runStrategyEngine>) {
+  const rec = decision.recommendation;
+  if (!rec || rec.tradeType === 'no_trade') return;
+
+  const alertPhone = process.env.ALERT_PHONE;
+  const alertEmail = process.env.ALERT_EMAIL;
+  if (!alertPhone && !alertEmail) return;
+
+  const message = formatTradeAlert(
+    strategy,
+    rec.tradeType ?? '',
+    rec.shortLeg?.strike ?? 0,
+    rec.longLeg?.strike ?? 0,
+    rec.credit ?? 0,
+    rec.probOfProfit ?? 0,
+    rec.expectedValue ?? 0
+  );
+
+  if (alertPhone) {
+    await dispatchAlert({
+      type: 'signal',
+      title: `SPX Setup: ${strategy.replace(/_/g, ' ')}`,
+      message,
+      priority: 'high',
+      channel: 'sms',
+      phone: alertPhone,
+    });
+  }
+
+  if (alertEmail) {
+    await dispatchAlert({
+      type: 'signal',
+      title: `SPX Signal Desk: ${strategy.replace(/_/g, ' ')} Setup`,
+      message,
+      priority: 'high',
+      channel: 'email',
+      email: alertEmail,
+    });
+  }
+}
+
 async function scanMarket() {
   if (!isMarketHours()) {
     console.log('Market closed — skipping scan');
@@ -25,7 +67,10 @@ async function scanMarket() {
 
   console.log(`[${new Date().toISOString()}] Scanning market...`);
 
-  const snapshot = getMockMarketData();
+  const snapshot = process.env.MARKETDATA_API_KEY
+    ? await fetchMarketSnapshot()
+    : getMockMarketData();
+
   const { spx, vix } = snapshot;
   const impliedVol = vix.price / 100;
   const ivRankValue = Math.min(100, Math.max(0, (vix.price - 12) / (40 - 12) * 100));
@@ -57,19 +102,20 @@ async function scanMarket() {
   const strategy = selectStrategy(conditions);
   console.log(`Strategy signal: ${strategy}`);
 
+  const decision = runStrategyEngine(conditions);
+
   // Check for volatility crush setup (10:30-13:00 window)
   if (strategy === 'VOLATILITY_CRUSH') {
     console.log('*** VOLATILITY CRUSH ALERT — Optimal selling window ***');
-    // TODO: Send push notification
+    await sendTradeAlert(strategy, decision);
   }
 
   // Check for elevated IV opportunity
   if (ivRankValue >= 70) {
     console.log(`*** HIGH IV RANK ${ivRankValue.toFixed(0)} — Premium selling opportunity ***`);
-    // TODO: Send alert
+    await sendTradeAlert(strategy, decision);
   }
 
-  const decision = runStrategyEngine(conditions);
   if (decision.recommendation?.confidence === 'high' && strategy !== 'NO_TRADE') {
     console.log(`HIGH CONFIDENCE SETUP: ${decision.recommendation.tradeType}`);
     console.log(`POP: ${(decision.recommendation.probOfProfit * 100).toFixed(1)}%`);

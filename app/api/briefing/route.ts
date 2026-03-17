@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
 import { getMockNewsAnalysis, analyzeNews } from '@/server/news-analyzer';
 import { generateMorningBrief } from '@/server/ai-briefing';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
@@ -9,8 +9,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const snapshot = getMockMarketData();
-    const newsAnalysis = process.env.NEWS_API_KEY
+    const snapshot = process.env.MARKETDATA_API_KEY
+      ? await fetchMarketSnapshot()
+      : getMockMarketData();
+    const newsAnalysis = process.env.GNEWS_API_KEY
       ? await analyzeNews()
       : getMockNewsAnalysis();
 
