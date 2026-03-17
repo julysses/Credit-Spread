@@ -84,7 +84,44 @@ function assessRiskImpact(item: NewsItem): 'low' | 'medium' | 'high' {
 }
 
 /**
- * Fetch news from News API
+ * Fetch news from GNews
+ */
+async function fetchFromGNews(): Promise<Partial<NewsItem>[]> {
+  const key = process.env.GNEWS_API_KEY;
+  if (!key) return [];
+
+  try {
+    const resp = await axios.get('https://gnews.io/api/v4/search', {
+      params: {
+        q: 'SPX OR "S&P 500" OR "Federal Reserve" OR VIX OR "stock market"',
+        lang: 'en',
+        max: 10,
+        sortby: 'publishedAt',
+        token: key,
+      },
+      timeout: 5000,
+    });
+
+    return (resp.data?.articles || []).map((a: {
+      publishedAt: string;
+      source?: { name: string };
+      title: string;
+      description: string;
+      url: string;
+    }) => ({
+      publishedAt: a.publishedAt,
+      source: a.source?.name || 'Unknown',
+      headline: a.title,
+      summary: a.description || '',
+      url: a.url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch news from NewsAPI
  */
 async function fetchFromNewsAPI(): Promise<Partial<NewsItem>[]> {
   const key = process.env.NEWS_API_KEY;
@@ -152,9 +189,23 @@ export function processNewsItems(rawItems: Partial<NewsItem>[]): NewsItem[] {
  * Full news analysis
  */
 export async function analyzeNews(): Promise<NewsAnalysis> {
-  const rawItems = await fetchFromNewsAPI();
+  // Fetch from both sources in parallel, merge, and deduplicate by headline
+  const [gnewsItems, newsApiItems] = await Promise.all([
+    fetchFromGNews(),
+    fetchFromNewsAPI(),
+  ]);
 
-  // If no API key, use demo data
+  const seen = new Set<string>();
+  const rawItems: Partial<NewsItem>[] = [];
+  for (const item of [...gnewsItems, ...newsApiItems]) {
+    const key = (item.headline || '').toLowerCase().slice(0, 60);
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      rawItems.push(item);
+    }
+  }
+
+  // If no API keys configured, use demo data
   if (rawItems.length === 0) {
     return getMockNewsAnalysis();
   }
