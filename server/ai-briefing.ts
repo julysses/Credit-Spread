@@ -84,7 +84,8 @@ EV: $${strategy.recommendation.expectedValue?.toFixed(2)}
       const fullText = resp.data?.content?.[0]?.text || '';
       return parseBriefText(fullText, date, 'claude');
     } catch (err) {
-      console.error('Claude briefing failed:', err);
+      const errData = (err as any)?.response?.data;
+      console.error('Claude briefing failed:', errData ? JSON.stringify(errData) : (err as Error).message);
     }
   }
 

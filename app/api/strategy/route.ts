@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
     const { generateMorningBrief } = await import('@/server/ai-briefing');
     const brief = await generateMorningBrief(snapshot, newsAnalysis, decision);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         decision,
@@ -109,6 +109,8 @@ export async function GET(req: NextRequest) {
       },
       timestamp: Date.now(),
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (error) {
     console.error('Strategy API error:', error);
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 });

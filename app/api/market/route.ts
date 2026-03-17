@@ -4,7 +4,6 @@ import { buildVolatilitySurface, computeVolatilitySkew, classifyVIXRegime, ivRan
 import { expectedMove } from '@/lib/models/black-scholes';
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 60; // 60 second cache
 
 export async function GET() {
   try {
@@ -48,7 +47,7 @@ export async function GET() {
 
     const vixRegime = classifyVIXRegime(vix.price);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         snapshot,
@@ -59,11 +58,13 @@ export async function GET() {
           expectedMove7d: expMove7d,
           expectedMove30d: expMove30d,
           skew,
-          surfacePoints: surfacePoints.slice(0, 50), // Limit for response size
+          surfacePoints: surfacePoints.slice(0, 50),
         },
       },
       timestamp: Date.now(),
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (error) {
     console.error('Market API error:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch market data' }, { status: 500 });

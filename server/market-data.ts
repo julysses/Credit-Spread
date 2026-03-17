@@ -136,15 +136,14 @@ async function fetchMDExpirations(symbol: string): Promise<string[]> {
 
 async function fetchMDOptionChain(
   symbol: string,
-  expiration: string,
-  strikeLimit: number = 20
+  expiration: string
 ): Promise<OptionChainEntry[]> {
   if (!MD_KEY) return [];
 
   try {
     const resp = await axios.get(`${MD_BASE}/options/chain/${symbol}/`, {
       headers: mdHeaders(),
-      params: { expiration, strikeLimit, greeks: 'true' },
+      params: { expiration, greeks: 'true' },
       timeout: 10000,
     });
 
@@ -271,7 +270,7 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
     fetchMDStockQuote('SPY'),
-    fetchMDOptionChain('SPX', expiry, 20),
+    fetchMDOptionChain('SPX', expiry),
   ]);
 
   // Fallback to Alpha Vantage for SPY if MarketData fails
