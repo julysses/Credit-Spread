@@ -1,6 +1,7 @@
 /**
  * Market Data Aggregator
- * Fetches SPX, VIX, options chain data from multiple providers
+ * Fetches SPX, VIX, options chain data from MarketData.app (primary)
+ * Falls back to Alpha Vantage for quotes when needed.
  */
 
 import axios from 'axios';
@@ -47,75 +48,120 @@ export interface MarketDataSnapshot {
 }
 
 // ─────────────────────────────────────────────
-// Tradier API (primary for options data)
+// MarketData.app (primary)
 // ─────────────────────────────────────────────
 
-const TRADIER_BASE = 'https://api.tradier.com/v1';
-const TRADIER_KEY = process.env.TRADIER_API_KEY;
+const MD_BASE = 'https://api.marketdata.app/v1';
+const MD_KEY = process.env.MARKETDATA_API_KEY;
 
-async function fetchTradierQuote(symbols: string[]): Promise<Record<string, MarketQuote>> {
-  if (!TRADIER_KEY) return {};
+const mdHeaders = () => ({
+  Authorization: `Token ${MD_KEY}`,
+  Accept: 'application/json',
+});
+
+async function fetchMDIndexQuote(symbol: string): Promise<MarketQuote | null> {
+  if (!MD_KEY) return null;
 
   try {
-    const resp = await axios.get(`${TRADIER_BASE}/markets/quotes`, {
-      params: { symbols: symbols.join(','), greeks: 'true' },
-      headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
+    const resp = await axios.get(`${MD_BASE}/indices/quotes/${symbol}/`, {
+      headers: mdHeaders(),
       timeout: 5000,
     });
 
-    const quotes: Record<string, MarketQuote> = {};
-    const rawQuotes = resp.data?.quotes?.quote;
-    const items = Array.isArray(rawQuotes) ? rawQuotes : [rawQuotes];
+    const d = resp.data;
+    if (d?.s !== 'ok') return null;
 
-    for (const q of items) {
-      if (!q) continue;
-      quotes[q.symbol] = {
-        symbol: q.symbol,
-        price: q.last || q.close || 0,
-        change: q.change || 0,
-        changePct: q.change_percentage || 0,
-        high: q.high || 0,
-        low: q.low || 0,
-        open: q.open || 0,
-        volume: q.volume || 0,
-        timestamp: Date.now(),
-      };
-    }
-
-    return quotes;
+    return {
+      symbol,
+      price: d.last?.[0] ?? 0,
+      change: d.change?.[0] ?? 0,
+      changePct: (d.changepct?.[0] ?? 0) * 100,
+      high: d['52weekHigh']?.[0] ?? 0,
+      low: d['52weekLow']?.[0] ?? 0,
+      open: 0,
+      volume: 0,
+      timestamp: Date.now(),
+    };
   } catch (err) {
-    console.error('Tradier quote fetch failed:', err);
-    return {};
+    console.error(`MarketData index quote failed (${symbol}):`, err);
+    return null;
   }
 }
 
-async function fetchTradierOptionChain(
-  symbol: string,
-  expiration: string
-): Promise<OptionChainEntry[]> {
-  if (!TRADIER_KEY) return [];
+async function fetchMDStockQuote(symbol: string): Promise<MarketQuote | null> {
+  if (!MD_KEY) return null;
 
   try {
-    const resp = await axios.get(`${TRADIER_BASE}/markets/options/chains`, {
-      params: { symbol, expiration, greeks: 'true' },
-      headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
-      timeout: 8000,
+    const resp = await axios.get(`${MD_BASE}/stocks/quotes/${symbol}/`, {
+      headers: mdHeaders(),
+      timeout: 5000,
     });
 
-    const options = resp.data?.options?.option;
-    if (!options) return [];
+    const d = resp.data;
+    if (d?.s !== 'ok') return null;
 
-    const items = Array.isArray(options) ? options : [options];
+    return {
+      symbol,
+      price: d.last?.[0] ?? 0,
+      change: d.change?.[0] ?? 0,
+      changePct: (d.changepct?.[0] ?? 0) * 100,
+      high: d['52weekHigh']?.[0] ?? 0,
+      low: d['52weekLow']?.[0] ?? 0,
+      open: 0,
+      volume: d.volume?.[0] ?? 0,
+      timestamp: Date.now(),
+    };
+  } catch (err) {
+    console.error(`MarketData stock quote failed (${symbol}):`, err);
+    return null;
+  }
+}
+
+async function fetchMDExpirations(symbol: string): Promise<string[]> {
+  if (!MD_KEY) return [];
+
+  try {
+    const resp = await axios.get(`${MD_BASE}/options/expirations/${symbol}/`, {
+      headers: mdHeaders(),
+      timeout: 5000,
+    });
+
+    const d = resp.data;
+    if (d?.s !== 'ok') return [];
+    return d.expirations ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchMDOptionChain(
+  symbol: string,
+  expiration: string,
+  strikeLimit: number = 20
+): Promise<OptionChainEntry[]> {
+  if (!MD_KEY) return [];
+
+  try {
+    const resp = await axios.get(`${MD_BASE}/options/chain/${symbol}/`, {
+      headers: mdHeaders(),
+      params: { expiration, strikeLimit, greeks: 'true' },
+      timeout: 10000,
+    });
+
+    const d = resp.data;
+    if (d?.s !== 'ok' || !d.strike) return [];
+
     const chainMap = new Map<number, OptionChainEntry>();
+    const count = d.strike.length;
+    const dte = d.dte?.[0] ?? Math.max(0, Math.round(
+      (new Date(expiration).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    ));
 
-    for (const opt of items) {
-      if (!opt?.strike) continue;
-      const strike = opt.strike;
+    for (let i = 0; i < count; i++) {
+      const strike = d.strike[i];
+      const side: string = d.side?.[i] ?? '';
 
       if (!chainMap.has(strike)) {
-        const dte = Math.max(0, Math.round(
-          (new Date(expiration).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-        ));
         chainMap.set(strike, {
           strike,
           expiry: expiration,
@@ -126,44 +172,28 @@ async function fetchTradierOptionChain(
       }
 
       const entry = chainMap.get(strike)!;
-      if (opt.option_type === 'call') {
-        entry.callBid = opt.bid || 0;
-        entry.callAsk = opt.ask || 0;
-        entry.callLast = opt.last || 0;
-        entry.callIV = opt.greeks?.mid_iv || 0;
-        entry.callDelta = opt.greeks?.delta || 0;
-        entry.callVolume = opt.volume || 0;
-        entry.callOI = opt.open_interest || 0;
-      } else {
-        entry.putBid = opt.bid || 0;
-        entry.putAsk = opt.ask || 0;
-        entry.putLast = opt.last || 0;
-        entry.putIV = opt.greeks?.mid_iv || 0;
-        entry.putDelta = opt.greeks?.delta || 0;
-        entry.putVolume = opt.volume || 0;
-        entry.putOI = opt.open_interest || 0;
+      if (side === 'call') {
+        entry.callBid = d.bid?.[i] ?? 0;
+        entry.callAsk = d.ask?.[i] ?? 0;
+        entry.callLast = d.last?.[i] ?? 0;
+        entry.callIV = d.iv?.[i] ?? 0;
+        entry.callDelta = d.delta?.[i] ?? 0;
+        entry.callVolume = d.volume?.[i] ?? 0;
+        entry.callOI = d.openInterest?.[i] ?? 0;
+      } else if (side === 'put') {
+        entry.putBid = d.bid?.[i] ?? 0;
+        entry.putAsk = d.ask?.[i] ?? 0;
+        entry.putLast = d.last?.[i] ?? 0;
+        entry.putIV = d.iv?.[i] ?? 0;
+        entry.putDelta = d.delta?.[i] ?? 0;
+        entry.putVolume = d.volume?.[i] ?? 0;
+        entry.putOI = d.openInterest?.[i] ?? 0;
       }
     }
 
     return Array.from(chainMap.values()).sort((a, b) => a.strike - b.strike);
   } catch (err) {
-    console.error('Tradier option chain fetch failed:', err);
-    return [];
-  }
-}
-
-async function fetchTradierExpirations(symbol: string): Promise<string[]> {
-  if (!TRADIER_KEY) return [];
-
-  try {
-    const resp = await axios.get(`${TRADIER_BASE}/markets/options/expirations`, {
-      params: { symbol, includeAllRoots: 'true' },
-      headers: { Authorization: `Bearer ${TRADIER_KEY}`, Accept: 'application/json' },
-      timeout: 5000,
-    });
-
-    return resp.data?.expirations?.date || [];
-  } catch {
+    console.error('MarketData option chain fetch failed:', err);
     return [];
   }
 }
@@ -213,7 +243,6 @@ export function isMarketOpen(): boolean {
   const min = ny.getMinutes();
   const timeNum = hour * 100 + min;
 
-  // Monday=1 through Friday=5
   if (day < 1 || day > 5) return false;
   return timeNum >= 930 && timeNum < 1600;
 }
@@ -223,7 +252,6 @@ export function getNextExpiry(daysOut: number = 7): string {
   const target = new Date(today);
   target.setDate(target.getDate() + daysOut);
 
-  // Find next Friday
   const day = target.getDay();
   const daysToFriday = day <= 5 ? 5 - day : 6;
   target.setDate(target.getDate() + daysToFriday);
@@ -236,63 +264,59 @@ export function getNextExpiry(daysOut: number = 7): string {
 // ─────────────────────────────────────────────
 
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
-  const symbols = ['^SPX', 'SPY', '^VIX'];
+  // Fetch SPX, VIX (indices) and SPY (stock) in parallel
+  const [spxRaw, vixRaw, spyRaw] = await Promise.all([
+    fetchMDIndexQuote('SPX'),
+    fetchMDIndexQuote('VIX'),
+    fetchMDStockQuote('SPY'),
+  ]);
 
-  // Fetch quotes
-  const quotes = await fetchTradierQuote(['SPY', 'VIX']);
+  // Fallback to Alpha Vantage for SPY if MarketData fails
+  const spyFallback = (!spyRaw || spyRaw.price === 0)
+    ? await fetchAlphaVantageQuote('SPY')
+    : null;
 
-  // If Tradier fails, try Alpha Vantage
-  let spxPrice = 0, spyPrice = 0, vixValue = 0;
+  const spyData = spyRaw ?? spyFallback;
+  const spyPrice = spyData?.price ?? 0;
+  const spxPrice = spxRaw?.price ?? (spyPrice * 10.05) || 5800;
+  const vixValue = vixRaw?.price ?? 18;
 
-  if (quotes['SPY']) {
-    spyPrice = quotes['SPY'].price;
-    // SPX ≈ SPY * 10 (rough approximation when SPX not directly available)
-    spxPrice = spyPrice * 10.05;
-  }
-  if (quotes['VIX']) {
-    vixValue = quotes['VIX'].price;
-  }
-
-  // Fallback to Alpha Vantage
-  if (!spyPrice) {
-    const spyQuote = await fetchAlphaVantageQuote('SPY');
-    if (spyQuote) {
-      spyPrice = spyQuote.price;
-      spxPrice = spyPrice * 10.05;
-    }
-  }
-
-  // Fetch option chain for nearest expiry
+  // Fetch option chain for nearest expiry — limit to 20 strikes to conserve credits
   const expiry = getNextExpiry(7);
-  const optionChain = await fetchTradierOptionChain('SPX', expiry);
+  const optionChain = await fetchMDOptionChain('SPX', expiry, 20);
 
   const spxQuote: MarketQuote = {
     symbol: 'SPX',
-    price: spxPrice || 5800,
-    change: 0, changePct: 0, high: 0, low: 0, open: 0, volume: 0,
+    price: spxPrice,
+    change: spxRaw?.change ?? 0,
+    changePct: spxRaw?.changePct ?? 0,
+    high: spxRaw?.high ?? 0,
+    low: spxRaw?.low ?? 0,
+    open: 0,
+    volume: 0,
     timestamp: Date.now(),
   };
 
   const spyQuote: MarketQuote = {
     symbol: 'SPY',
     price: spyPrice || 580,
-    change: quotes['SPY']?.change || 0,
-    changePct: quotes['SPY']?.changePct || 0,
-    high: quotes['SPY']?.high || 0,
-    low: quotes['SPY']?.low || 0,
-    open: quotes['SPY']?.open || 0,
-    volume: quotes['SPY']?.volume || 0,
+    change: spyData?.change ?? 0,
+    changePct: spyData?.changePct ?? 0,
+    high: spyData?.high ?? 0,
+    low: spyData?.low ?? 0,
+    open: spyData?.open ?? 0,
+    volume: spyData?.volume ?? 0,
     timestamp: Date.now(),
   };
 
   const vixQuote: MarketQuote = {
     symbol: 'VIX',
-    price: vixValue || 18,
-    change: quotes['VIX']?.change || 0,
-    changePct: quotes['VIX']?.changePct || 0,
-    high: quotes['VIX']?.high || 0,
-    low: quotes['VIX']?.low || 0,
-    open: quotes['VIX']?.open || 0,
+    price: vixValue,
+    change: vixRaw?.change ?? 0,
+    changePct: vixRaw?.changePct ?? 0,
+    high: vixRaw?.high ?? 0,
+    low: vixRaw?.low ?? 0,
+    open: 0,
     volume: 0,
     timestamp: Date.now(),
   };
