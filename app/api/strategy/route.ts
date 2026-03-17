@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     const snapshot = useMock || !process.env.MARKETDATA_API_KEY
       ? getMockMarketData()
       : await fetchMarketSnapshot();
-    const newsAnalysis = useMock || !process.env.GNEWS_API_KEY
+    const hasNewsSource = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+    const newsAnalysis = useMock || !hasNewsSource
       ? getMockNewsAnalysis()
       : await analyzeNews();
 
@@ -99,7 +100,11 @@ export async function GET(req: NextRequest) {
         decision,
         brief,
         news: newsAnalysis,
-        conditions,
+        conditions: {
+          ...conditions,
+          vixChangePct: vix.changePct,
+          spxChangePct: spx.changePct,
+        },
         snapshot: { isMarketOpen: snapshot.isMarketOpen },
       },
       timestamp: Date.now(),

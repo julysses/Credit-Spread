@@ -121,6 +121,43 @@ async function fetchFromGNews(): Promise<Partial<NewsItem>[]> {
 }
 
 /**
+ * Fetch news from Alpha Vantage News Sentiment API
+ */
+async function fetchFromAlphaVantage(): Promise<Partial<NewsItem>[]> {
+  const key = process.env.ALPHA_VANTAGE_API_KEY;
+  if (!key) return [];
+
+  try {
+    const resp = await axios.get('https://www.alphavantage.co/query', {
+      params: {
+        function: 'NEWS_SENTIMENT',
+        tickers: 'SPY',
+        limit: 20,
+        sort: 'LATEST',
+        apikey: key,
+      },
+      timeout: 5000,
+    });
+
+    return (resp.data?.feed || []).map((a: {
+      time_published: string;
+      source: string;
+      title: string;
+      summary: string;
+      url: string;
+    }) => ({
+      publishedAt: a.time_published,
+      source: a.source,
+      headline: a.title,
+      summary: a.summary,
+      url: a.url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Fetch news from NewsAPI
  */
 async function fetchFromNewsAPI(): Promise<Partial<NewsItem>[]> {
@@ -189,15 +226,16 @@ export function processNewsItems(rawItems: Partial<NewsItem>[]): NewsItem[] {
  * Full news analysis
  */
 export async function analyzeNews(): Promise<NewsAnalysis> {
-  // Fetch from both sources in parallel, merge, and deduplicate by headline
-  const [gnewsItems, newsApiItems] = await Promise.all([
+  // Fetch from all sources in parallel, merge, and deduplicate by headline
+  const [gnewsItems, newsApiItems, alphaVantageItems] = await Promise.all([
     fetchFromGNews(),
     fetchFromNewsAPI(),
+    fetchFromAlphaVantage(),
   ]);
 
   const seen = new Set<string>();
   const rawItems: Partial<NewsItem>[] = [];
-  for (const item of [...gnewsItems, ...newsApiItems]) {
+  for (const item of [...gnewsItems, ...newsApiItems, ...alphaVantageItems]) {
     const key = (item.headline || '').toLowerCase().slice(0, 60);
     if (key && !seen.has(key)) {
       seen.add(key);

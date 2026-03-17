@@ -145,7 +145,7 @@ export default function DashboardPage() {
         spxPrice={conditions?.spxPrice ?? 5800}
         spxChangePct={conditions?.spxDailyChange ?? 0}
         vix={conditions?.vix ?? 18}
-        vixChangePct={0}
+        vixChangePct={conditions?.vixChangePct ?? 0}
         vixRegime={conditions?.vixRegime ?? 'moderate'}
         riskLevel={conditions?.riskLevel ?? 'moderate'}
         isMarketOpen={state.strategy?.snapshot?.isMarketOpen ?? false}
