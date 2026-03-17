@@ -75,15 +75,15 @@ async function fetchMDIndexQuote(symbol: string): Promise<MarketQuote | null> {
       symbol,
       price: d.last?.[0] ?? 0,
       change: d.change?.[0] ?? 0,
-      changePct: (d.changepct?.[0] ?? 0) * 100,
-      high: d['52weekHigh']?.[0] ?? 0,
-      low: d['52weekLow']?.[0] ?? 0,
-      open: 0,
+      changePct: d.changepct?.[0] ?? 0,
+      high: d.high?.[0] ?? d['52weekHigh']?.[0] ?? 0,
+      low: d.low?.[0] ?? d['52weekLow']?.[0] ?? 0,
+      open: d.open?.[0] ?? 0,
       volume: 0,
       timestamp: Date.now(),
     };
   } catch (err) {
-    console.error(`MarketData index quote failed (${symbol}):`, err);
+    console.error(`MarketData index quote failed (${symbol}):`, (err as Error).message);
     return null;
   }
 }
@@ -104,15 +104,15 @@ async function fetchMDStockQuote(symbol: string): Promise<MarketQuote | null> {
       symbol,
       price: d.last?.[0] ?? 0,
       change: d.change?.[0] ?? 0,
-      changePct: (d.changepct?.[0] ?? 0) * 100,
-      high: d['52weekHigh']?.[0] ?? 0,
-      low: d['52weekLow']?.[0] ?? 0,
-      open: 0,
+      changePct: d.changepct?.[0] ?? 0,
+      high: d.high?.[0] ?? d['52weekHigh']?.[0] ?? 0,
+      low: d.low?.[0] ?? d['52weekLow']?.[0] ?? 0,
+      open: d.open?.[0] ?? 0,
       volume: d.volume?.[0] ?? 0,
       timestamp: Date.now(),
     };
   } catch (err) {
-    console.error(`MarketData stock quote failed (${symbol}):`, err);
+    console.error(`MarketData stock quote failed (${symbol}):`, (err as Error).message);
     return null;
   }
 }
@@ -264,11 +264,14 @@ export function getNextExpiry(daysOut: number = 7): string {
 // ─────────────────────────────────────────────
 
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
-  // Fetch SPX, VIX (indices) and SPY (stock) in parallel
-  const [spxRaw, vixRaw, spyRaw] = await Promise.all([
+  const expiry = getNextExpiry(7);
+
+  // Fetch SPX, VIX, SPY, and option chain all in parallel
+  const [spxRaw, vixRaw, spyRaw, optionChain] = await Promise.all([
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
     fetchMDStockQuote('SPY'),
+    fetchMDOptionChain('SPX', expiry, 20),
   ]);
 
   // Fallback to Alpha Vantage for SPY if MarketData fails
@@ -279,11 +282,23 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const spyData = spyRaw ?? spyFallback;
   const spyPrice = spyData?.price ?? 0;
   const spxPrice = spxRaw?.price ?? (spyPrice * 10.05 || 5800);
-  const vixValue = vixRaw?.price ?? 18;
 
-  // Fetch option chain for nearest expiry — limit to 20 strikes to conserve credits
-  const expiry = getNextExpiry(7);
-  const optionChain = await fetchMDOptionChain('SPX', expiry, 20);
+  // VIX: use live price, or derive from option chain ATM IV, or fall back to 18
+  let vixValue = vixRaw?.price ?? 0;
+  if (!vixValue && optionChain.length > 0) {
+    const atmOptions = optionChain.filter(
+      o => Math.abs(o.strike - spxPrice) / spxPrice < 0.015 && o.putIV > 0
+    );
+    if (atmOptions.length > 0) {
+      const avgIV = atmOptions.reduce((s, o) => s + o.putIV, 0) / atmOptions.length;
+      vixValue = parseFloat((avgIV * 100).toFixed(2));
+      console.log(`VIX derived from ATM put IV: ${vixValue}`);
+    }
+  }
+  if (!vixValue) {
+    console.warn('VIX fallback to 18 — live and chain-derived data unavailable');
+    vixValue = 18;
+  }
 
   const spxQuote: MarketQuote = {
     symbol: 'SPX',
@@ -292,7 +307,7 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     changePct: spxRaw?.changePct ?? 0,
     high: spxRaw?.high ?? 0,
     low: spxRaw?.low ?? 0,
-    open: 0,
+    open: spxRaw?.open ?? 0,
     volume: 0,
     timestamp: Date.now(),
   };
@@ -316,7 +331,7 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     changePct: vixRaw?.changePct ?? 0,
     high: vixRaw?.high ?? 0,
     low: vixRaw?.low ?? 0,
-    open: 0,
+    open: vixRaw?.open ?? 0,
     volume: 0,
     timestamp: Date.now(),
   };
