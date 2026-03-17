@@ -199,49 +199,61 @@ async function fetchMDOptionChain(
 
 // ─────────────────────────────────────────────
 // Yahoo Finance (secondary source — free, no auth)
+// Uses v8/finance/chart which doesn't require a crumb/cookie
 // ─────────────────────────────────────────────
 
-/**
- * Batch-fetch quotes from Yahoo Finance for SPX, VIX, and SPY.
- * Yahoo symbols: ^GSPC (SPX), ^VIX (VIX), SPY
- */
+const YAHOO_SYMBOL_MAP: Record<string, string> = { SPX: '%5EGSPC', VIX: '%5EVIX', SPY: 'SPY' };
+
+async function fetchYahooChart(appSymbol: 'SPX' | 'VIX' | 'SPY'): Promise<MarketQuote | null> {
+  const yahooSym = YAHOO_SYMBOL_MAP[appSymbol];
+  try {
+    const resp = await axios.get(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}`,
+      {
+        params: { range: '1d', interval: '1m', includePrePost: 'false' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 7000,
+      }
+    );
+
+    const meta = resp.data?.chart?.result?.[0]?.meta;
+    if (!meta || !meta.regularMarketPrice) return null;
+
+    const price: number = meta.regularMarketPrice;
+    const prev: number = meta.chartPreviousClose ?? meta.previousClose ?? price;
+    const change = price - prev;
+    const changePct = prev ? (change / prev) * 100 : 0;
+
+    return {
+      symbol: appSymbol,
+      price,
+      change,
+      changePct,
+      high: meta.regularMarketDayHigh ?? price,
+      low: meta.regularMarketDayLow ?? price,
+      open: meta.regularMarketOpen ?? price,
+      volume: meta.regularMarketVolume ?? 0,
+      timestamp: meta.regularMarketTime ? meta.regularMarketTime * 1000 : Date.now(),
+    };
+  } catch (err) {
+    console.error(`Yahoo Finance chart failed (${appSymbol}):`, (err as Error).message);
+    return null;
+  }
+}
+
 async function fetchYahooQuotes(
   symbols: ('SPX' | 'VIX' | 'SPY')[]
 ): Promise<Map<string, MarketQuote>> {
   const result = new Map<string, MarketQuote>();
-  const yahooMap: Record<string, string> = { SPX: '^GSPC', VIX: '^VIX', SPY: 'SPY' };
-  const reverseMap: Record<string, string> = { '^GSPC': 'SPX', '^VIX': 'VIX', SPY: 'SPY' };
-  const yahooSymbols = symbols.map(s => yahooMap[s]).join(',');
-
-  try {
-    const resp = await axios.get('https://query1.finance.yahoo.com/v7/finance/quote', {
-      params: { symbols: yahooSymbols },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Accept: 'application/json',
-      },
-      timeout: 6000,
-    });
-
-    const quotes: any[] = resp.data?.quoteResponse?.result ?? [];
-    for (const q of quotes) {
-      const sym = reverseMap[q.symbol] ?? q.symbol;
-      result.set(sym, {
-        symbol: sym,
-        price: q.regularMarketPrice ?? 0,
-        change: q.regularMarketChange ?? 0,
-        changePct: q.regularMarketChangePercent ?? 0,
-        high: q.regularMarketDayHigh ?? 0,
-        low: q.regularMarketDayLow ?? 0,
-        open: q.regularMarketOpen ?? 0,
-        volume: q.regularMarketVolume ?? 0,
-        timestamp: (q.regularMarketTime ?? 0) * 1000 || Date.now(),
-      });
-    }
-  } catch (err) {
-    console.error('Yahoo Finance batch quote failed:', (err as Error).message);
+  // Fetch all in parallel
+  const results = await Promise.all(symbols.map(s => fetchYahooChart(s).then(q => ({ s, q }))));
+  for (const { s, q } of results) {
+    if (q) result.set(s, q);
   }
-
   return result;
 }
 
