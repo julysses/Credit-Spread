@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MarketHeader } from '@/components/dashboard/MarketHeader';
 import { MorningBrief } from '@/components/dashboard/MorningBrief';
 import { TradeCard } from '@/components/dashboard/TradeCard';
@@ -355,46 +355,55 @@ function InstitutionalSOP() {
 }
 
 // ─────────────────────────────────────────────
-// TradingView Embed
+// TradingView Script-based Embed (reliable symbol resolution)
 // ─────────────────────────────────────────────
-function TradingViewWidget() {
+function TVChart({ title, symbol, containerId }: { title: string; symbol: string; containerId: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = '';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.textContent = JSON.stringify({
+      symbol,
+      interval: 'D',
+      theme: 'dark',
+      style: '1',
+      locale: 'en',
+      hide_side_toolbar: true,
+      allow_symbol_change: false,
+      save_image: false,
+      timezone: 'America/New_York',
+      backgroundColor: '#060b14',
+      gridColor: 'rgba(255,255,255,0.04)',
+      width: '100%',
+      height: 300,
+      container_id: containerId,
+    });
+    containerRef.current.appendChild(script);
+  }, [symbol, containerId]);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>SPY Chart</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent className="p-0">
-        <div className="relative" style={{ height: 300 }}>
-          <iframe
-            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_spy&symbol=AMEX%3ASPY&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&locale=en"
-            style={{ width: '100%', height: '100%', border: 'none', borderRadius: '0 0 12px 12px' }}
-            allowFullScreen
-            title="SPY Chart"
-          />
-        </div>
+      <CardContent className="p-0 overflow-hidden rounded-b-xl">
+        <div ref={containerRef} style={{ height: 300 }} />
       </CardContent>
     </Card>
   );
 }
 
+function TradingViewWidget() {
+  return <TVChart title="SPY Chart" symbol="AMEX:SPY" containerId="tv_spy" />;
+}
+
 function VIXWidget() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>VIX Chart</CardTitle>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="relative" style={{ height: 300 }}>
-          <iframe
-            src="https://www.tradingview.com/widgetembed/?frameElementId=tradingview_vix&symbol=TVC%3AVIX&interval=D&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=1a1f2e&studies=[]&theme=dark&style=1&timezone=America%2FNew_York&locale=en"
-            style={{ width: '100%', height: '100%', border: 'none', borderRadius: '0 0 12px 12px' }}
-            allowFullScreen
-            title="VIX Chart"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <TVChart title="VIX Chart" symbol="TVC:VIX" containerId="tv_vix" />;
 }
 
 // ─────────────────────────────────────────────
