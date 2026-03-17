@@ -12,9 +12,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const useMock = url.searchParams.get('mock') === 'true';
 
-    const snapshot = useMock || !process.env.MARKETDATA_API_KEY
-      ? getMockMarketData()
-      : await fetchMarketSnapshot();
+    const snapshot = useMock ? getMockMarketData() : await fetchMarketSnapshot();
     const hasNewsSource = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
     const newsAnalysis = useMock || !hasNewsSource
       ? getMockNewsAnalysis()

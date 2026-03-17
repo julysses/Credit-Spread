@@ -7,9 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const snapshot = process.env.MARKETDATA_API_KEY
-      ? await fetchMarketSnapshot()
-      : getMockMarketData();
+    const snapshot = await fetchMarketSnapshot();
 
     const { spx, vix, optionChain } = snapshot;
     const riskFreeRate = 0.05;

@@ -198,6 +198,54 @@ async function fetchMDOptionChain(
 }
 
 // ─────────────────────────────────────────────
+// Yahoo Finance (secondary source — free, no auth)
+// ─────────────────────────────────────────────
+
+/**
+ * Batch-fetch quotes from Yahoo Finance for SPX, VIX, and SPY.
+ * Yahoo symbols: ^GSPC (SPX), ^VIX (VIX), SPY
+ */
+async function fetchYahooQuotes(
+  symbols: ('SPX' | 'VIX' | 'SPY')[]
+): Promise<Map<string, MarketQuote>> {
+  const result = new Map<string, MarketQuote>();
+  const yahooMap: Record<string, string> = { SPX: '^GSPC', VIX: '^VIX', SPY: 'SPY' };
+  const reverseMap: Record<string, string> = { '^GSPC': 'SPX', '^VIX': 'VIX', SPY: 'SPY' };
+  const yahooSymbols = symbols.map(s => yahooMap[s]).join(',');
+
+  try {
+    const resp = await axios.get('https://query1.finance.yahoo.com/v7/finance/quote', {
+      params: { symbols: yahooSymbols },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'application/json',
+      },
+      timeout: 6000,
+    });
+
+    const quotes: any[] = resp.data?.quoteResponse?.result ?? [];
+    for (const q of quotes) {
+      const sym = reverseMap[q.symbol] ?? q.symbol;
+      result.set(sym, {
+        symbol: sym,
+        price: q.regularMarketPrice ?? 0,
+        change: q.regularMarketChange ?? 0,
+        changePct: q.regularMarketChangePercent ?? 0,
+        high: q.regularMarketDayHigh ?? 0,
+        low: q.regularMarketDayLow ?? 0,
+        open: q.regularMarketOpen ?? 0,
+        volume: q.regularMarketVolume ?? 0,
+        timestamp: (q.regularMarketTime ?? 0) * 1000 || Date.now(),
+      });
+    }
+  } catch (err) {
+    console.error('Yahoo Finance batch quote failed:', (err as Error).message);
+  }
+
+  return result;
+}
+
+// ─────────────────────────────────────────────
 // Alpha Vantage (fallback for quotes)
 // ─────────────────────────────────────────────
 
@@ -265,7 +313,7 @@ export function getNextExpiry(daysOut: number = 7): string {
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const expiry = getNextExpiry(7);
 
-  // Fetch SPX, VIX, SPY, and option chain all in parallel
+  // Fetch MarketData.app (indices + stocks) and option chain in parallel
   const [spxRaw, vixRaw, spyRaw, optionChain] = await Promise.all([
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
@@ -273,17 +321,32 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     fetchMDOptionChain('SPX', expiry),
   ]);
 
-  // Fallback to Alpha Vantage for SPY if MarketData fails
-  const spyFallback = (!spyRaw || spyRaw.price === 0)
-    ? await fetchAlphaVantageQuote('SPY')
-    : null;
+  // Determine which symbols need a Yahoo Finance fallback
+  const needsYahoo: ('SPX' | 'VIX' | 'SPY')[] = [];
+  if (!spxRaw || spxRaw.price === 0) needsYahoo.push('SPX');
+  if (!vixRaw || vixRaw.price === 0) needsYahoo.push('VIX');
+  if (!spyRaw || spyRaw.price === 0) needsYahoo.push('SPY');
 
-  const spyData = spyRaw ?? spyFallback;
+  // Fallback: Yahoo Finance (free, no auth, real-time)
+  const yahooData = needsYahoo.length > 0
+    ? await fetchYahooQuotes(needsYahoo)
+    : new Map<string, MarketQuote>();
+
+  // Fallback chain for SPY: MarketData → Yahoo → Alpha Vantage
+  let spyData = spyRaw && spyRaw.price > 0 ? spyRaw : yahooData.get('SPY') ?? null;
+  if (!spyData || spyData.price === 0) {
+    spyData = await fetchAlphaVantageQuote('SPY');
+  }
   const spyPrice = spyData?.price ?? 0;
-  const spxPrice = spxRaw?.price ?? (spyPrice * 10.05 || 5800);
 
-  // VIX: use live price, or derive from option chain ATM IV, or fall back to 18
-  let vixValue = vixRaw?.price ?? 0;
+  // SPX: MarketData → Yahoo → SPY×10.05 estimate
+  const spxSource = (spxRaw && spxRaw.price > 0) ? spxRaw : yahooData.get('SPX') ?? null;
+  const spxPrice = spxSource?.price ?? (spyPrice > 0 ? spyPrice * 10.05 : 5800);
+  if (!spxSource) console.warn('SPX: using SPY-derived estimate');
+
+  // VIX: MarketData → Yahoo → ATM IV derivation → hardcoded 18
+  let vixSource = (vixRaw && vixRaw.price > 0) ? vixRaw : yahooData.get('VIX') ?? null;
+  let vixValue = vixSource?.price ?? 0;
   if (!vixValue && optionChain.length > 0) {
     const atmOptions = optionChain.filter(
       o => Math.abs(o.strike - spxPrice) / spxPrice < 0.015 && o.putIV > 0
@@ -295,18 +358,18 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     }
   }
   if (!vixValue) {
-    console.warn('VIX fallback to 18 — live and chain-derived data unavailable');
+    console.warn('VIX: all sources failed — hardcoded fallback 18');
     vixValue = 18;
   }
 
   const spxQuote: MarketQuote = {
     symbol: 'SPX',
     price: spxPrice,
-    change: spxRaw?.change ?? 0,
-    changePct: spxRaw?.changePct ?? 0,
-    high: spxRaw?.high ?? 0,
-    low: spxRaw?.low ?? 0,
-    open: spxRaw?.open ?? 0,
+    change: spxSource?.change ?? 0,
+    changePct: spxSource?.changePct ?? 0,
+    high: spxSource?.high ?? 0,
+    low: spxSource?.low ?? 0,
+    open: spxSource?.open ?? 0,
     volume: 0,
     timestamp: Date.now(),
   };
@@ -326,14 +389,16 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const vixQuote: MarketQuote = {
     symbol: 'VIX',
     price: vixValue,
-    change: vixRaw?.change ?? 0,
-    changePct: vixRaw?.changePct ?? 0,
-    high: vixRaw?.high ?? 0,
-    low: vixRaw?.low ?? 0,
-    open: vixRaw?.open ?? 0,
+    change: vixSource?.change ?? 0,
+    changePct: vixSource?.changePct ?? 0,
+    high: vixSource?.high ?? 0,
+    low: vixSource?.low ?? 0,
+    open: vixSource?.open ?? 0,
     volume: 0,
     timestamp: Date.now(),
   };
+
+  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSource ? (spxRaw?.price ? 'MD' : 'Yahoo') : 'derived'} VIX=${vixSource ? (vixRaw?.price ? 'MD' : 'Yahoo') : 'fallback'}`);
 
   return {
     spx: spxQuote,
