@@ -278,7 +278,7 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
 
   const spyData = spyRaw ?? spyFallback;
   const spyPrice = spyData?.price ?? 0;
-  const spxPrice = spxRaw?.price ?? (spyPrice * 10.05) || 5800;
+  const spxPrice = spxRaw?.price ?? (spyPrice * 10.05 || 5800);
   const vixValue = vixRaw?.price ?? 18;
 
   // Fetch option chain for nearest expiry — limit to 20 strikes to conserve credits
