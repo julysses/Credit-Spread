@@ -355,35 +355,50 @@ function InstitutionalSOP() {
 }
 
 // ─────────────────────────────────────────────
-// TradingView Script-based Embed (reliable symbol resolution)
+// TradingView — tv.js widget (most reliable approach)
 // ─────────────────────────────────────────────
 function TVChart({ title, symbol, containerId }: { title: string; symbol: string; containerId: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.innerHTML = '';
+    const init = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (!(window as any).TradingView) return;
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.innerHTML = '';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      new (window as any).TradingView.widget({
+        container_id: containerId,
+        symbol,
+        interval: 'D',
+        theme: 'dark',
+        style: '1',
+        locale: 'en',
+        timezone: 'America/New_York',
+        hide_side_toolbar: true,
+        allow_symbol_change: false,
+        save_image: false,
+        width: '100%',
+        height: 300,
+      });
+    };
 
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.textContent = JSON.stringify({
-      symbol,
-      interval: 'D',
-      theme: 'dark',
-      style: '1',
-      locale: 'en',
-      hide_side_toolbar: true,
-      allow_symbol_change: false,
-      save_image: false,
-      timezone: 'America/New_York',
-      backgroundColor: '#060b14',
-      gridColor: 'rgba(255,255,255,0.04)',
-      width: '100%',
-      height: 300,
-      container_id: containerId,
-    });
-    containerRef.current.appendChild(script);
+    // Load tv.js once; reuse if already loaded
+    if ((window as { TradingView?: unknown }).TradingView) {
+      init();
+    } else if (!document.getElementById('tv-js')) {
+      const s = document.createElement('script');
+      s.id = 'tv-js';
+      s.src = 'https://s3.tradingview.com/tv.js';
+      s.async = true;
+      s.onload = init;
+      document.head.appendChild(s);
+    } else {
+      // Script tag exists but not yet loaded — poll briefly
+      const poll = setInterval(() => {
+        if ((window as { TradingView?: unknown }).TradingView) { clearInterval(poll); init(); }
+      }, 100);
+      return () => clearInterval(poll);
+    }
   }, [symbol, containerId]);
 
   return (
@@ -392,7 +407,7 @@ function TVChart({ title, symbol, containerId }: { title: string; symbol: string
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="p-0 overflow-hidden rounded-b-xl">
-        <div ref={containerRef} style={{ height: 300 }} />
+        <div id={containerId} style={{ height: 300 }} />
       </CardContent>
     </Card>
   );
