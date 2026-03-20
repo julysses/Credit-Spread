@@ -76,9 +76,43 @@ function isMacroRelevant(text: string): boolean {
   return MACRO_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
 }
 
+// Phrases that indicate a macro event is UPCOMING (trade block warranted)
+const UPCOMING_PHRASES = [
+  'ahead of', 'before the', 'upcoming', 'preview', 'expected to',
+  'will decide', 'will announce', 'scheduled', 'tomorrow', 'next week',
+  'this week', 'later today', 'later this', 'anticipat', 'awaiting',
+  'prepares to', 'braces for', 'on the eve', 'eyes the', 'looks to',
+];
+
+// Phrases that indicate a macro event is PAST (no longer a trade block)
+const PAST_PHRASES = [
+  'decided to', 'raised rates', 'cut rates', 'held rates', 'kept rates',
+  'held steady', 'after the fed', 'following the fomc', 'following the fed',
+  'in the wake of', 'the fed decided', 'the fed raised', 'the fed cut',
+  'the fed held', 'as expected', 'voted to', 'announced that',
+  'concluded', 'ended with', 'wrapped up', 'delivered', 'signed into',
+  'rate decision was', 'after the decision', 'post-fomc', 'post fomc',
+];
+
+/**
+ * Returns false if the article is clearly about a PAST macro event,
+ * true if the event is upcoming or ambiguous.
+ */
+function isUpcomingMacroEvent(headline: string, summary: string): boolean {
+  const lower = `${headline} ${summary}`.toLowerCase();
+  const hasPast = PAST_PHRASES.some(p => lower.includes(p));
+  const hasUpcoming = UPCOMING_PHRASES.some(p => lower.includes(p));
+  if (hasPast && !hasUpcoming) return false; // clearly post-event coverage
+  return true; // upcoming or ambiguous — err on the side of caution
+}
+
 function assessRiskImpact(item: NewsItem): 'low' | 'medium' | 'high' {
   if (item.geopoliticalRisk && item.sentiment === 'negative') return 'high';
-  if (item.macroRelevance && item.sentimentScore < -0.5) return 'high';
+  if (item.macroRelevance && item.sentimentScore < -0.5) {
+    // Only block trading for UPCOMING macro events, not post-event coverage
+    if (isUpcomingMacroEvent(item.headline, item.summary)) return 'high';
+    return 'medium';
+  }
   if (item.geopoliticalRisk || item.macroRelevance) return 'medium';
   return 'low';
 }
@@ -253,8 +287,17 @@ export async function analyzeNews(): Promise<NewsAnalysis> {
   const avgScore = items.reduce((a, b) => a + b.sentimentScore, 0) / items.length;
   const overallSentiment = avgScore > 0.1 ? 'bullish' : avgScore < -0.1 ? 'bearish' : 'neutral';
 
-  const geoRiskCount = items.filter(i => i.geopoliticalRisk && i.riskImpact === 'high').length;
-  const macroRiskCount = items.filter(i => i.macroRelevance && i.riskImpact === 'high').length;
+  // For isMacroEventDay purposes, only count articles published within the last 20 hours
+  // so yesterday's FOMC coverage doesn't keep blocking trading the next day
+  const now = Date.now();
+  const recentItems = items.filter(i => {
+    const age = now - new Date(i.publishedAt).getTime();
+    return age <= 20 * 60 * 60 * 1000; // 20 hours
+  });
+  const recentOrAll = recentItems.length >= 3 ? recentItems : items;
+
+  const geoRiskCount = recentOrAll.filter(i => i.geopoliticalRisk && i.riskImpact === 'high').length;
+  const macroRiskCount = recentOrAll.filter(i => i.macroRelevance && i.riskImpact === 'high').length;
 
   const geopoliticalRiskLevel = geoRiskCount >= 3 ? 'high' : geoRiskCount >= 1 ? 'medium' : 'low';
   const macroRiskLevel = macroRiskCount >= 2 ? 'high' : macroRiskCount >= 1 ? 'medium' : 'low';
