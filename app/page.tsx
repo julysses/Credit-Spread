@@ -6,11 +6,12 @@ import { MorningBrief } from '@/components/dashboard/MorningBrief';
 import { TradeCard } from '@/components/dashboard/TradeCard';
 import { MarketRegimeCard } from '@/components/dashboard/MarketRegimeCard';
 import { TradeJournal } from '@/components/dashboard/TradeJournal';
+import { StrategyCompare } from '@/components/dashboard/StrategyCompare';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { AnalyticsChart } from '@/components/charts/AnalyticsChart';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-type Tab = 'dashboard' | 'analytics' | 'journal' | 'simulator';
+type Tab = 'dashboard' | 'strategies' | 'analytics' | 'journal' | 'simulator';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface DashboardState {
@@ -25,6 +26,7 @@ interface DashboardState {
 
 export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [strategiesData, setStrategiesData] = useState<any>(null);
   const [state, setState] = useState<DashboardState>({
     loading: true,
     error: null,
@@ -39,11 +41,13 @@ export default function DashboardPage() {
     try {
       setState((s: DashboardState) => ({ ...s, loading: true, error: null }));
 
-      const [stratRes, analyticsRes, tradesRes] = await Promise.all([
+      const [stratRes, analyticsRes, tradesRes, strategiesRes] = await Promise.all([
         fetch('/api/strategy').then(r => r.json()),
         fetch('/api/analytics').then(r => r.json()),
         fetch('/api/trades').then(r => r.json()),
+        fetch('/api/strategies').then(r => r.json()),
       ]);
+      if (strategiesRes?.success) setStrategiesData(strategiesRes.data);
 
       // Run Monte Carlo for the recommended trade
       let mcData = null;
@@ -159,6 +163,7 @@ export default function DashboardPage() {
             {(
               [
                 { id: 'dashboard', label: 'Dashboard' },
+                { id: 'strategies', label: 'Strategies' },
                 { id: 'analytics', label: 'Analytics' },
                 { id: 'journal', label: 'Trade Journal' },
                 { id: 'simulator', label: 'Monte Carlo' },
@@ -288,6 +293,24 @@ export default function DashboardPage() {
               <VIXWidget />
             </div>
           </div>
+        )}
+
+        {tab === 'strategies' && (
+          strategiesData ? (
+            <StrategyCompare
+              strategies={strategiesData.strategies ?? []}
+              marketContext={strategiesData.marketContext}
+              recommended={strategiesData.recommended}
+              onSelectStrategy={(card) => {
+                // Switch to dashboard and surface the selected strategy's recommendation
+                setTab('dashboard');
+              }}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500 text-sm">
+              Loading strategies...
+            </div>
+          )
         )}
 
         {tab === 'analytics' && state.analytics && (

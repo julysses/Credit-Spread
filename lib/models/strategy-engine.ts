@@ -459,6 +459,127 @@ export function runStrategyEngine(conditions: MarketConditions): StrategyDecisio
   return { strategy, rationale, conditions, recommendation };
 }
 
+// ─────────────────────────────────────────────
+// Strategy Metadata — descriptions, timing, exit rules
+// ─────────────────────────────────────────────
+
+export interface StrategyMetadata {
+  displayName: string;
+  tagline: string;
+  description: string;
+  marketConditions: string;
+  idealVIXRange: string;
+  typicalDTE: number;
+  riskProfile: 'Conservative' | 'Moderate' | 'Aggressive' | 'None';
+  entryWindow: string;          // human-readable
+  entryHHMM: { start: number; end: number }[]; // 24h HHMM pairs
+  exitRules: string[];
+  bestFor: string;
+  avoid: string;
+}
+
+export const STRATEGY_METADATA: Record<StrategyType, StrategyMetadata> = {
+  NO_TRADE: {
+    displayName: 'Standing Aside',
+    tagline: 'Capital preservation',
+    description: 'No position. Macro event, extreme VIX, or insufficient edge.',
+    marketConditions: 'Macro event day, VIX extreme (>40), or EV negative across all setups',
+    idealVIXRange: 'N/A',
+    typicalDTE: 0,
+    riskProfile: 'None',
+    entryWindow: 'N/A',
+    entryHHMM: [],
+    exitRules: ['Wait for macro event to resolve', 'Re-evaluate next trading session'],
+    bestFor: 'FOMC days, CPI/NFP releases, earnings blackout periods',
+    avoid: 'Using capital while edge is unclear',
+  },
+  '90_PERCENT_FRAMEWORK': {
+    displayName: '90% Framework',
+    tagline: 'High-probability OTM credit spread',
+    description: 'Sell an OTM put (or call) spread targeting 88–92% POP. Strike placed 1.2× expected move from spot. Width: $10. Ideal in low-volatility, stable regimes.',
+    marketConditions: 'VIX 15–22, range-bound or mild trend, IV > Realized Vol, no macro events',
+    idealVIXRange: '15–22',
+    typicalDTE: 7,
+    riskProfile: 'Conservative',
+    entryWindow: '9:45–10:15 AM ET  or  3:00–3:45 PM ET',
+    entryHHMM: [{ start: 945, end: 1015 }, { start: 1500, end: 1545 }],
+    exitRules: [
+      'Close at 50% of credit received (profit target)',
+      'Stop loss at 2.2× credit paid to close',
+      'Time stop: close at 21 DTE if original DTE > 30',
+      'Close same-day if VIX spikes >20% intraday',
+    ],
+    bestFor: 'Low-vol environments, theta harvesting, defined-risk income',
+    avoid: 'FOMC weeks, CPI/NFP days, VIX > 25',
+  },
+  MODERN_INCOME: {
+    displayName: 'Modern Income',
+    tagline: 'Directional credit spread in elevated vol',
+    description: 'Sell an OTM put spread (bullish bias) or call spread (bearish bias) with elevated IV premium. Tighter OTM placement (0.96/1.04) than 90% framework to capture more credit. Width: $10.',
+    marketConditions: 'VIX 20–35, directional bias established, IV significantly above RV',
+    idealVIXRange: '20–35',
+    typicalDTE: 14,
+    riskProfile: 'Moderate',
+    entryWindow: '10:00–11:00 AM ET  (after direction established)',
+    entryHHMM: [{ start: 1000, end: 1100 }],
+    exitRules: [
+      'Close at 50% of credit received',
+      'Stop loss at 2.0× credit',
+      'Exit immediately if directional bias reverses (news/price action)',
+      'Max hold: 14 DTE — do not carry through expiry week',
+    ],
+    bestFor: 'Elevated vol with clear directional signal, post-spike stabilization',
+    avoid: 'Neutral markets, extreme vol spikes (VIX > 35), macro uncertainty',
+  },
+  VOLATILITY_CRUSH: {
+    displayName: 'Volatility Crush',
+    tagline: '0-DTE — capture IV mean reversion after vol spike',
+    description: 'Sell a tight OTM spread (width $5) same-day when SPX has moved >1.5% and VIX has spiked. Trade the stabilization window 10:30 AM–1:00 PM ET only. Close same day.',
+    marketConditions: '|SPX change| > 1.5%, VIX spike, 10:30–13:00 ET stabilization window, VIX not extreme',
+    idealVIXRange: '25–40',
+    typicalDTE: 0,
+    riskProfile: 'Aggressive',
+    entryWindow: '10:30 AM–1:00 PM ET ONLY  (stabilization window)',
+    entryHHMM: [{ start: 1030, end: 1300 }],
+    exitRules: [
+      'Close at 50% of credit OR end of day — whichever comes first',
+      'Hard stop at 1.5× credit (tight — 0 DTE gamma risk)',
+      'Exit immediately if VIX re-spikes >10% from entry',
+      'NEVER hold through 3:30 PM ET',
+    ],
+    bestFor: 'Post-spike vol crush plays, 0-DTE theta collection, high-IV days',
+    avoid: 'Low-vol days (VIX < 20), before 10:30 AM, trending markets with no stabilization',
+  },
+};
+
+/**
+ * Evaluate all non-NO_TRADE strategies with current conditions.
+ * Returns full recommendation for each, useful for comparison view.
+ */
+export function evaluateAllStrategies(conditions: MarketConditions): {
+  strategy: StrategyType;
+  recommendation: TradeRecommendation;
+  metadata: StrategyMetadata;
+  isRecommended: boolean;
+  isViable: boolean;
+}[] {
+  const recommended = selectStrategy(conditions);
+  const strategies: StrategyType[] = ['90_PERCENT_FRAMEWORK', 'MODERN_INCOME', 'VOLATILITY_CRUSH'];
+
+  return strategies.map(strategy => {
+    const dte = strategy === 'VOLATILITY_CRUSH' ? 0 : strategy === '90_PERCENT_FRAMEWORK' ? 7 : 14;
+    const recommendation = constructSpread(conditions, strategy, dte);
+    const viable = recommendation.tradeType !== 'no_trade' && recommendation.probOfProfit > 0;
+    return {
+      strategy,
+      recommendation,
+      metadata: STRATEGY_METADATA[strategy],
+      isRecommended: strategy === recommended,
+      isViable: viable,
+    };
+  });
+}
+
 /**
  * Risk assessment
  */
