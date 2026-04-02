@@ -250,6 +250,55 @@ export const performanceMetrics = pgTable('performance_metrics', {
 });
 
 // ─────────────────────────────────────────────
+// Signal Stack Snapshots
+// ─────────────────────────────────────────────
+export const signalSnapshots = pgTable('signal_snapshots', {
+  id:                     serial('id').primaryKey(),
+  createdAt:              timestamp('created_at').defaultNow().notNull(),
+  // Crown macro inputs
+  wtiPrice:               real('wti_price'),
+  wti4weekChangePct:      real('wti_4week_change_pct'),
+  spxPrice:               real('spx_price'),
+  spx200sma:              real('spx_200sma'),
+  breadthPctAbove200sma:  real('breadth_pct_above_200sma'),
+  hySpreadBps:            real('hy_spread_bps'),
+  hySpread2weekChange:    real('hy_spread_2week_change'),
+  dxyLevel:               real('dxy_level'),
+  vixLevel:               real('vix_level'),
+  goldPrice:              real('gold_price'),
+  goldWeeklyChangePct:    real('gold_weekly_change_pct'),
+  // Flow + vol inputs
+  portfolioVolAnnualized: real('portfolio_vol_annualized'),
+  gexValue:               real('gex_value'),
+  vvixLevel:              real('vvix_level'),
+  pcrValue:               real('pcr_value'),
+  // Scores + signal
+  macroScore:             integer('macro_score'),
+  flowScore:              integer('flow_score'),
+  compositeSignal:        varchar('composite_signal', { length: 60 }),
+  notes:                  text('notes'),
+  aiRecommendation:       text('ai_recommendation'),
+}, (table) => ({
+  createdIdx: index('signal_snapshots_created_idx').on(table.createdAt),
+}));
+
+// ─────────────────────────────────────────────
+// Trade Log (Signal Stack actions)
+// ─────────────────────────────────────────────
+export const tradeLog = pgTable('trade_log', {
+  id:               serial('id').primaryKey(),
+  createdAt:        timestamp('created_at').defaultNow().notNull(),
+  signalSnapshotId: integer('signal_snapshot_id').references(() => signalSnapshots.id),
+  actionTaken:      text('action_taken'),
+  optionsStructure: text('options_structure'),
+  entryPrice:       real('entry_price'),
+  targetDte:        integer('target_dte'),
+  outcomeNotes:     text('outcome_notes'),
+}, (table) => ({
+  snapshotIdx: index('trade_log_snapshot_idx').on(table.signalSnapshotId),
+}));
+
+// ─────────────────────────────────────────────
 // Morning Briefings
 // ─────────────────────────────────────────────
 export const morningBriefings = pgTable('morning_briefings', {

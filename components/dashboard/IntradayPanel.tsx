@@ -95,6 +95,15 @@ export function IntradayPanel({ spxPrice = 5800, vix = 18 }: IntradayPanelProps)
   const tier = result?.tier ?? 'NO_TRADE';
   const tierCfg = TIER_CONFIG[tier];
 
+  // 0DTE expiry = today (Friday if weekend, adjusted for market holidays)
+  const todayExpiry = (() => {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const day = d.getDay(); // 0=Sun, 6=Sat
+    if (day === 0) d.setDate(d.getDate() + 1); // Sunday → Monday
+    if (day === 6) d.setDate(d.getDate() + 2); // Saturday → Monday
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+  })();
+
   return (
     <Card className={`border ${tierCfg.border} ${tierCfg.bg}`}>
       <CardHeader className="pb-2">
@@ -196,6 +205,7 @@ export function IntradayPanel({ spxPrice = 5800, vix = 18 }: IntradayPanelProps)
                     <BiasIcon bias={result.bias} />
                   </div>
 
+                  <StructRow label="Expiry" value={`${todayExpiry} (0DTE)`} valueClass="text-yellow-400 font-mono" />
                   <StructRow label="Short Strike" value={result.shortStrike.toFixed(0)} valueClass="text-red-400 font-mono" />
                   <StructRow label="Long Strike" value={result.longStrike.toFixed(0)} valueClass="text-green-400 font-mono" />
                   <StructRow label="Spread Width" value={`${result.spreadWidth} pts`} valueClass="text-gray-300" />
