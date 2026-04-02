@@ -7,11 +7,12 @@ import { TradeCard } from '@/components/dashboard/TradeCard';
 import { MarketRegimeCard } from '@/components/dashboard/MarketRegimeCard';
 import { TradeJournal } from '@/components/dashboard/TradeJournal';
 import { StrategyCompare } from '@/components/dashboard/StrategyCompare';
+import { IntradayPanel } from '@/components/dashboard/IntradayPanel';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { AnalyticsChart } from '@/components/charts/AnalyticsChart';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-type Tab = 'dashboard' | 'strategies' | 'analytics' | 'journal' | 'simulator';
+type Tab = 'dashboard' | 'strategies' | '0dte' | 'analytics' | 'journal' | 'simulator';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface DashboardState {
@@ -164,6 +165,7 @@ export default function DashboardPage() {
               [
                 { id: 'dashboard', label: 'Dashboard' },
                 { id: 'strategies', label: 'Strategies' },
+                { id: '0dte', label: '⚡ 0DTE' },
                 { id: 'analytics', label: 'Analytics' },
                 { id: 'journal', label: 'Trade Journal' },
                 { id: 'simulator', label: 'Monte Carlo' },
@@ -181,7 +183,13 @@ export default function DashboardPage() {
                 {t.label}
               </button>
             ))}
-            <div className="ml-auto flex items-center gap-2 py-2">
+            <div className="ml-auto flex items-center gap-3 py-2">
+              <a
+                href="/signal-stack"
+                className="text-xs text-purple-400 hover:text-purple-300 border border-purple-700/40 bg-purple-500/10 px-2.5 py-1 rounded hover:bg-purple-500/20 transition-colors font-medium"
+              >
+                Signal Stack ↗
+              </a>
               <button
                 onClick={fetchAll}
                 disabled={state.loading}
@@ -291,6 +299,65 @@ export default function DashboardPage() {
               <InstitutionalSOP />
               <TradingViewWidget />
               <VIXWidget />
+            </div>
+          </div>
+        )}
+
+        {tab === '0dte' && (
+          <div className="space-y-6">
+            <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+                <span className="text-yellow-400 font-bold text-sm">⚡ 0DTE Intraday Engine</span>
+                <span className="text-gray-500">Signal refresh · every run · time decay accelerates past 1 PM ET</span>
+                <span className="text-gray-600">Max 3 trades/day · 1-2% risk per trade · Time stop: 3:45 PM ET</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <IntradayPanel spxPrice={conditions?.spxPrice} vix={conditions?.vix} />
+              <div className="space-y-4">
+                {/* Intraday SOP */}
+                <Card>
+                  <CardHeader><CardTitle>0DTE Rules of Engagement</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[
+                        { num: 1, rule: 'Wait for opening range (first 30 min) before entering', color: 'text-blue-400' },
+                        { num: 2, rule: 'Sell strikes OUTSIDE the intraday expected move', color: 'text-green-400' },
+                        { num: 3, rule: 'High IV → wider spreads (25 pts). Low IV → tighter (10 pts)', color: 'text-yellow-400' },
+                        { num: 4, rule: 'Take profit at 25–50% of credit received', color: 'text-green-400' },
+                        { num: 5, rule: 'Stop loss at 1.5× credit — no exceptions', color: 'text-red-400' },
+                        { num: 6, rule: 'Close ALL positions before 3:45 PM ET', color: 'text-orange-400' },
+                        { num: 7, rule: 'Gamma emergency: exit immediately if price approaches short strike', color: 'text-red-400' },
+                        { num: 8, rule: 'Max 3 trades per day — quality over quantity', color: 'text-gray-400' },
+                        { num: 9, rule: 'Do NOT trade 0DTE on FOMC, CPI, or NFP release days', color: 'text-red-400' },
+                      ].map(item => (
+                        <div key={item.num} className="flex items-start gap-2.5 text-xs">
+                          <span className={`${item.color} font-bold w-4 shrink-0`}>{item.num}.</span>
+                          <span className="text-gray-400">{item.rule}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader><CardTitle>Intraday POP Formula</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 text-xs text-gray-400">
+                      <div className="font-mono bg-gray-800/60 rounded p-3 space-y-1">
+                        <div>EM_intraday = S × σ × √(t / 390)</div>
+                        <div className="text-gray-600">where t = minutes remaining, σ = VIX/100</div>
+                      </div>
+                      <div className="font-mono bg-gray-800/60 rounded p-3 space-y-1">
+                        <div>POP_final =</div>
+                        <div className="pl-4">POP_mc × 0.4 +</div>
+                        <div className="pl-4">POP_em × 0.3 +</div>
+                        <div className="pl-4">POP_delta × 0.2 +</div>
+                        <div className="pl-4">Gamma_Adj × 0.1</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         )}
