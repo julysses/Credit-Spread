@@ -316,3 +316,4 @@ export const morningBriefings = pgTable('morning_briefings', {
   newsHighlights: jsonb('news_highlights'),
   fullBrief: text('full_brief'),
 });
+
