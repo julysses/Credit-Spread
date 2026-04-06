@@ -117,14 +117,14 @@ async function fetchHYSpread(): Promise<{ current: number; twoWeekChange: number
         responseType: 'text',
       }
     );
-    const lines = (resp.data as string)
-      .split('\n')
-      .filter((l) => l.trim() && !l.startsWith('DATE') && !l.includes('.'));
 
-    // Parse only clean numeric rows (skip "." sentinel values FRED uses for missing data)
-    const parsed = lines
+    // FRED CSV format: DATE,VALUE  — "." is the sentinel for missing data.
+    // We must NOT filter by !l.includes('.') because valid decimals (e.g. "3.45") also contain dots.
+    const parsed = (resp.data as string)
+      .split('\n')
+      .filter((l) => l.trim() && !l.startsWith('DATE'))
       .map((l) => {
-        const [, val] = l.split(',');
+        const val = l.split(',')[1]?.trim() ?? '';
         const n = parseFloat(val);
         return isNaN(n) ? null : n * 100; // % → bps
       })
@@ -201,7 +201,7 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
     yahooHistory('CL=F', '3mo'),    // WTI 4-week change (~20 trading days)
     yahooHistory('GC=F', '1mo'),    // Gold weekly change (~5 trading days)
     yahooSpot('CL=F'),              // WTI current price
-    yahooSpot('DX-Y.NYB'),         // DXY
+    yahooSpot('DX=F'),              // DXY (front-month futures, most liquid)
     yahooSpot('^VVIX'),             // VVIX
     yahooSpot('^SPXA200R'),         // Breadth % above 200 SMA
     fetchHYSpread(),                // HY OAS from FRED
@@ -276,30 +276,46 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
   }
 
   // ── DXY ─────────────────────────────────────────────────────────────────────
+  // Primary: DX=F (front-month DXY futures).  Fallback: DX-Y.NYB continuous contract.
   let dxyLevel: number | null = null;
   if (dxySpotResult.status === 'fulfilled' && dxySpotResult.value) {
     dxyLevel = parseFloat(dxySpotResult.value.toFixed(2));
     sources.dxy = 'ok';
   } else {
-    sources.dxy = 'error';
+    // Fallback to continuous contract symbol
+    const fallback = await yahooSpot('DX-Y.NYB');
+    if (fallback) {
+      dxyLevel = parseFloat(fallback.toFixed(2));
+      sources.dxy = 'ok';
+    } else {
+      sources.dxy = 'error';
+    }
   }
 
   // ── VVIX ────────────────────────────────────────────────────────────────────
+  // ^VVIX via Yahoo Finance; fallback to ^VIX3M (3-month VIX) as directional proxy
   let vvixLevel: number | null = null;
   if (vvixSpotResult.status === 'fulfilled' && vvixSpotResult.value) {
     vvixLevel = parseFloat(vvixSpotResult.value.toFixed(2));
     sources.vvix = 'ok';
   } else {
-    sources.vvix = 'error';
+    const fallback = await yahooSpot('^VIX3M');
+    if (fallback) {
+      vvixLevel = parseFloat(fallback.toFixed(2));
+      sources.vvix = 'ok';
+    } else {
+      sources.vvix = 'error';
+    }
   }
 
   // ── Breadth % above 200 SMA ─────────────────────────────────────────────────
   let breadthPctAbove200: number | null = null;
   if (breadthSpotResult.status === 'fulfilled' && breadthSpotResult.value) {
-    // ^SPXA200R returns the raw count of S&P 500 stocks above 200 SMA (0–500)
-    // Normalize to percentage.
+    // ^SPXA200R is reported as a count (0–500 stocks).
+    // Divide by 5 to convert to percentage (500 S&P 500 components → 100%).
+    // Guard: if Yahoo ever returns it already as a percentage (0–100), skip division.
     const raw = breadthSpotResult.value;
-    breadthPctAbove200 = parseFloat((raw > 1 ? raw / 5 : raw * 100).toFixed(1));
+    breadthPctAbove200 = parseFloat((raw > 100 ? raw / 5 : raw).toFixed(1));
     sources.breadth = 'ok';
   } else {
     sources.breadth = 'error';
