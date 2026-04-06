@@ -352,18 +352,26 @@ function InputField({
   onChange,
   unit,
   step,
+  autoFetched,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   unit?: string;
   step?: number;
+  autoFetched?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label className="text-xs text-slate-400">
+      <label className="text-xs text-slate-400 flex items-center gap-1">
         {label}
         {unit ? ` (${unit})` : ''}
+        {autoFetched && (
+          <span
+            title="Auto-fetched from live market data"
+            className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 ml-0.5 shrink-0"
+          />
+        )}
       </label>
       <input
         type="number"
@@ -642,6 +650,12 @@ export function SignalStackEngine() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  // ── Auto-fetch state ────────────────────────────────────────────────────────
+  const [autoFetching, setAutoFetching] = useState(false);
+  const [autoFetchError, setAutoFetchError] = useState<string | null>(null);
+  const [autoFetchedFields, setAutoFetchedFields] = useState<Set<keyof Inputs>>(new Set());
+  const [lastAutoFetch, setLastAutoFetch] = useState<Date | null>(null);
+
   // Live clock
   useEffect(() => {
     const tick = () =>
@@ -685,6 +699,64 @@ export function SignalStackEngine() {
   useEffect(() => {
     fetchHistory();
   }, [fetchHistory]);
+
+  // ── Auto-fetch market inputs ────────────────────────────────────────────────
+  const fetchMarketInputs = useCallback(async () => {
+    setAutoFetching(true);
+    setAutoFetchError(null);
+    try {
+      const res = await fetch('/api/signal-stack/market-inputs');
+      const json = await res.json();
+      if (!json.success) {
+        setAutoFetchError(json.error ?? 'Failed to fetch market data');
+        return;
+      }
+      const d = json.data;
+
+      // Map API response → Inputs keys, skipping nulls so manual values are preserved
+      const updates: Partial<Inputs> = {};
+      const fetched = new Set<keyof Inputs>();
+
+      const set = <K extends keyof Inputs>(key: K, val: number | null) => {
+        if (val !== null && !isNaN(val)) { updates[key] = val as Inputs[K]; fetched.add(key); }
+      };
+
+      set('spxPrice',           d.spxPrice);
+      set('vixLevel',           d.vixLevel);
+      set('spx200sma',          d.spx200sma);
+      set('breadthPctAbove200', d.breadthPctAbove200);
+      set('wtiPrice',           d.wtiPrice);
+      set('wti4wkChangePct',    d.wti4wkChangePct);
+      set('dxyLevel',           d.dxyLevel);
+      set('goldPrice',          d.goldPrice);
+      set('goldWeeklyChangePct',d.goldWeeklyChangePct);
+      set('hySpreadBps',        d.hySpreadBps);
+      set('hySpread2wkChange',  d.hySpread2wkChange);
+      set('gexValue',           d.gexValue);
+      set('vvixLevel',          d.vvixLevel);
+      set('pcrValue',           d.pcrValue);
+
+      setInputs((prev) => ({ ...prev, ...updates }));
+      setAutoFetchedFields(fetched);
+      setLastAutoFetch(new Date());
+
+      // Surface any per-source errors as a warning
+      const failed = Object.entries(d.sources ?? {})
+        .filter(([, s]) => s === 'error')
+        .map(([k]) => k);
+      if (failed.length > 0) {
+        setAutoFetchError(`Partial: could not fetch ${failed.join(', ')}`);
+      }
+    } catch (e) {
+      setAutoFetchError('Network error fetching market inputs');
+      console.error('Auto-fetch error:', e);
+    } finally {
+      setAutoFetching(false);
+    }
+  }, []);
+
+  // Auto-fetch on mount
+  useEffect(() => { fetchMarketInputs(); }, [fetchMarketInputs]);
 
   function updateInput<K extends keyof Inputs>(key: K, value: Inputs[K]) {
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -801,26 +873,58 @@ export function SignalStackEngine() {
 
           {/* LEFT: Input Panel */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={16} className="text-blue-400" />
               <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Market Inputs</h2>
+              <button
+                onClick={fetchMarketInputs}
+                disabled={autoFetching}
+                title="Refresh live market data"
+                className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={11} className={autoFetching ? 'animate-spin' : ''} />
+                {autoFetching ? 'Fetching…' : 'Refresh'}
+              </button>
             </div>
+
+            {/* Auto-fetch status banner */}
+            {autoFetching && (
+              <div className="flex items-center gap-2 text-xs text-blue-400 bg-blue-950/40 border border-blue-800/40 rounded px-3 py-2 mb-3">
+                <RefreshCw size={11} className="animate-spin shrink-0" />
+                Loading live market data from MarketData.app, Yahoo Finance &amp; FRED…
+              </div>
+            )}
+            {!autoFetching && lastAutoFetch && (
+              <div className="flex items-center justify-between text-xs mb-3">
+                <span className="flex items-center gap-1.5 text-emerald-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  Live data — {lastAutoFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="text-slate-500">{autoFetchedFields.size}/14 auto-filled</span>
+              </div>
+            )}
+            {autoFetchError && (
+              <div className="text-xs text-yellow-400 bg-yellow-950/30 border border-yellow-800/40 rounded px-3 py-2 mb-3">
+                ⚠ {autoFetchError}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="WTI Price" value={inputs.wtiPrice} onChange={(v) => updateInput('wtiPrice', v)} unit="$" />
-              <InputField label="WTI 4wk Chg" value={inputs.wti4wkChangePct} onChange={(v) => updateInput('wti4wkChangePct', v)} unit="%" />
-              <InputField label="SPX Price" value={inputs.spxPrice} onChange={(v) => updateInput('spxPrice', v)} unit="$" step={1} />
-              <InputField label="SPX 200 SMA" value={inputs.spx200sma} onChange={(v) => updateInput('spx200sma', v)} unit="$" step={1} />
-              <InputField label="Breadth > 200" value={inputs.breadthPctAbove200} onChange={(v) => updateInput('breadthPctAbove200', v)} unit="%" />
-              <InputField label="HY Spread" value={inputs.hySpreadBps} onChange={(v) => updateInput('hySpreadBps', v)} unit="bps" step={1} />
-              <InputField label="HY 2wk Chg" value={inputs.hySpread2wkChange} onChange={(v) => updateInput('hySpread2wkChange', v)} unit="bps" step={1} />
-              <InputField label="DXY Level" value={inputs.dxyLevel} onChange={(v) => updateInput('dxyLevel', v)} />
-              <InputField label="VIX Level" value={inputs.vixLevel} onChange={(v) => updateInput('vixLevel', v)} />
-              <InputField label="Gold Price" value={inputs.goldPrice} onChange={(v) => updateInput('goldPrice', v)} unit="$" step={1} />
-              <InputField label="Gold Wkly Chg" value={inputs.goldWeeklyChangePct} onChange={(v) => updateInput('goldWeeklyChangePct', v)} unit="%" />
+              <InputField label="WTI Price" value={inputs.wtiPrice} onChange={(v) => updateInput('wtiPrice', v)} unit="$" autoFetched={autoFetchedFields.has('wtiPrice')} />
+              <InputField label="WTI 4wk Chg" value={inputs.wti4wkChangePct} onChange={(v) => updateInput('wti4wkChangePct', v)} unit="%" autoFetched={autoFetchedFields.has('wti4wkChangePct')} />
+              <InputField label="SPX Price" value={inputs.spxPrice} onChange={(v) => updateInput('spxPrice', v)} unit="$" step={1} autoFetched={autoFetchedFields.has('spxPrice')} />
+              <InputField label="SPX 200 SMA" value={inputs.spx200sma} onChange={(v) => updateInput('spx200sma', v)} unit="$" step={1} autoFetched={autoFetchedFields.has('spx200sma')} />
+              <InputField label="Breadth > 200" value={inputs.breadthPctAbove200} onChange={(v) => updateInput('breadthPctAbove200', v)} unit="%" autoFetched={autoFetchedFields.has('breadthPctAbove200')} />
+              <InputField label="HY Spread" value={inputs.hySpreadBps} onChange={(v) => updateInput('hySpreadBps', v)} unit="bps" step={1} autoFetched={autoFetchedFields.has('hySpreadBps')} />
+              <InputField label="HY 2wk Chg" value={inputs.hySpread2wkChange} onChange={(v) => updateInput('hySpread2wkChange', v)} unit="bps" step={1} autoFetched={autoFetchedFields.has('hySpread2wkChange')} />
+              <InputField label="DXY Level" value={inputs.dxyLevel} onChange={(v) => updateInput('dxyLevel', v)} autoFetched={autoFetchedFields.has('dxyLevel')} />
+              <InputField label="VIX Level" value={inputs.vixLevel} onChange={(v) => updateInput('vixLevel', v)} autoFetched={autoFetchedFields.has('vixLevel')} />
+              <InputField label="Gold Price" value={inputs.goldPrice} onChange={(v) => updateInput('goldPrice', v)} unit="$" step={1} autoFetched={autoFetchedFields.has('goldPrice')} />
+              <InputField label="Gold Wkly Chg" value={inputs.goldWeeklyChangePct} onChange={(v) => updateInput('goldWeeklyChangePct', v)} unit="%" autoFetched={autoFetchedFields.has('goldWeeklyChangePct')} />
               <InputField label="Portfolio Vol" value={inputs.portfolioVolAnnualized} onChange={(v) => updateInput('portfolioVolAnnualized', v)} unit="%" />
-              <InputField label="GEX Value" value={inputs.gexValue} onChange={(v) => updateInput('gexValue', v)} step={100000000} />
-              <InputField label="VVIX Level" value={inputs.vvixLevel} onChange={(v) => updateInput('vvixLevel', v)} />
-              <InputField label="P/C Ratio" value={inputs.pcrValue} onChange={(v) => updateInput('pcrValue', v)} step={0.01} />
+              <InputField label="GEX Value" value={inputs.gexValue} onChange={(v) => updateInput('gexValue', v)} step={100000000} autoFetched={autoFetchedFields.has('gexValue')} />
+              <InputField label="VVIX Level" value={inputs.vvixLevel} onChange={(v) => updateInput('vvixLevel', v)} autoFetched={autoFetchedFields.has('vvixLevel')} />
+              <InputField label="P/C Ratio" value={inputs.pcrValue} onChange={(v) => updateInput('pcrValue', v)} step={0.01} autoFetched={autoFetchedFields.has('pcrValue')} />
             </div>
             <button
               onClick={handleRunSignalStack}
