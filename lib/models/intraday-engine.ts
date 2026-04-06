@@ -45,12 +45,59 @@ export interface IntradaySignalResult {
   maxRisk: number;              // $ per share
   pop: number;                  // Probability of profit 0–1
   spreadWidth: number;
+  // Per-leg detail (added for full trade structure display)
+  optionType: 'put' | 'call';
+  shortDelta: number;           // absolute delta of the short leg
+  longDelta: number;            // absolute delta of the long leg
+  shortPremium: number;         // estimated short leg premium
+  longPremium: number;          // estimated long leg premium
+  impliedVol: number;           // annualized IV (VIX / 100)
   reasons: string[];
   warnings: string[];
   exitRules: {
     takeProfitPct: number;      // e.g. 0.50 = take 50% of credit
     stopLossMult: number;       // e.g. 1.5 = stop at 1.5× credit
     timeStopMinutes: number;    // Close if X minutes remain
+    takeProfitDollar: number;   // credit × takeProfitPct
+    stopLossDollar: number;     // credit × stopLossMult
+  };
+}
+
+// ─────────────────────────────────────────────
+// Playbook — all 5 strategies scored
+// ─────────────────────────────────────────────
+
+export interface IntradayStrategyAssessment {
+  strategyId: IntradayStrategyType;
+  displayName: string;
+  description: string;
+  spreadType: 'put_credit_spread' | 'call_credit_spread' | 'iron_condor';
+  bias: 'bullish' | 'bearish' | 'neutral';
+  score: number;
+  tier: IntradayTier;
+  isViable: boolean;
+  entryWindow: string;
+  setupConditions: string[];
+  metConditions: string[];
+  shortStrike: number;
+  longStrike: number;
+  spreadWidth: number;
+  estimatedCredit: number;
+  maxRisk: number;
+  pop: number;
+  optionType: 'put' | 'call';
+  shortDelta: number;
+  longDelta: number;
+  shortPremium: number;
+  longPremium: number;
+  impliedVol: number;
+  warnings: string[];
+  exitRules: {
+    takeProfitPct: number;
+    stopLossMult: number;
+    timeStop: string;
+    takeProfitDollar: number;
+    stopLossDollar: number;
   };
 }
 
@@ -341,9 +388,15 @@ export function analyzeIntradaySignals(inputs: IntradayInputs): IntradaySignalRe
     maxRisk: 0,
     pop: 0,
     spreadWidth: 0,
+    optionType: 'put',
+    shortDelta: 0,
+    longDelta: 0,
+    shortPremium: 0,
+    longPremium: 0,
+    impliedVol: inputs.vix / 100,
     reasons: [reason],
     warnings: [],
-    exitRules: { takeProfitPct: 0.50, stopLossMult: 1.5, timeStopMinutes: 15 },
+    exitRules: { takeProfitPct: 0.50, stopLossMult: 1.5, timeStopMinutes: 15, takeProfitDollar: 0, stopLossDollar: 0 },
   });
 
   // Too close to open (first 30 min) — wait for opening range to form
@@ -409,15 +462,29 @@ export function analyzeIntradaySignals(inputs: IntradayInputs): IntradaySignalRe
     direction, emHigh, emLow,
   );
 
-  // Probabilities
+  // Probabilities & per-leg details
   const pop = calcIntradayPOP(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining, direction);
   const estimatedCredit = estimateCredit(inputs.spxPrice, shortStrike, longStrike, inputs.vix, inputs.minutesRemaining);
   const maxRisk = spreadWidth - estimatedCredit;
 
+  // Per-leg deltas and premium estimates
+  const impliedVol = inputs.vix / 100;
+  const shortDelta = direction === 'put'
+    ? 1 - probAboveStrike(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining)
+    : probAboveStrike(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining);
+  const longDelta = direction === 'put'
+    ? 1 - probAboveStrike(inputs.spxPrice, longStrike, inputs.vix, inputs.minutesRemaining)
+    : probAboveStrike(inputs.spxPrice, longStrike, inputs.vix, inputs.minutesRemaining);
+  // shortPremium ≈ credit + longPremium; longPremium estimated from delta × spreadWidth
+  const longPremium = Math.round(Math.max(0.05, longDelta * spreadWidth * 0.35) * 20) / 20;
+  const shortPremium = Math.round((estimatedCredit + longPremium) * 20) / 20;
+
   const { tier, confidence } = scoreTier(winnerScore);
   const confidenceScore = Math.round(confidence * 100);
 
-  // Display names
+  const takeProfitPct = 0.50;
+  const stopLossMult = 1.5;
+
   const displayNames: Record<IntradayStrategyType, string> = {
     '0DTE_VOL_CRUSH': 'Volatility Crush',
     '0DTE_DIRECTIONAL_PUT': 'Directional — Put Credit Spread',
@@ -442,12 +509,156 @@ export function analyzeIntradaySignals(inputs: IntradayInputs): IntradaySignalRe
     maxRisk: Math.round(maxRisk * 100) / 100,
     pop: Math.round(pop * 1000) / 1000,
     spreadWidth,
+    optionType: direction,
+    shortDelta: Math.round(shortDelta * 1000) / 1000,
+    longDelta:  Math.round(longDelta  * 1000) / 1000,
+    shortPremium,
+    longPremium,
+    impliedVol,
     reasons: winnerReasons,
     warnings: winnerWarnings,
     exitRules: {
-      takeProfitPct: 0.50,
-      stopLossMult: 1.5,
+      takeProfitPct,
+      stopLossMult,
       timeStopMinutes: 15,
+      takeProfitDollar: Math.round(estimatedCredit * takeProfitPct * 100) / 100,
+      stopLossDollar:   Math.round(estimatedCredit * stopLossMult  * 100) / 100,
     },
   };
+}
+
+// ─────────────────────────────────────────────
+// Playbook — score all 5 intraday strategies
+// ─────────────────────────────────────────────
+
+const STRATEGY_META: Record<string, {
+  description: string;
+  spreadType: 'put_credit_spread' | 'call_credit_spread' | 'iron_condor';
+  entryWindow: string;
+  setupConditions: string[];
+}> = {
+  '0DTE_VOL_CRUSH': {
+    description: 'Sell an OTM put credit spread (or iron condor) when IV is elevated and morning volatility is contained. Profit as IV reverts and time value decays.',
+    spreadType: 'put_credit_spread',
+    entryWindow: '10:30 AM – 1:00 PM ET',
+    setupConditions: ['VIX > 16 (IV premium present)', 'SPX near VWAP (< 0.3× EM)', 'RSI 40–60 (neutral / directionless)', 'Morning spike contained below 1σ EM', 'Normal volume — no directional push'],
+  },
+  '0DTE_DIRECTIONAL_PUT': {
+    description: 'Sell a put credit spread below the market on a clear bullish day. Price is trending above VWAP and RSI momentum confirms the up-move.',
+    spreadType: 'put_credit_spread',
+    entryWindow: '9:45 – 11:00 AM ET · 2:00 – 3:30 PM ET',
+    setupConditions: ['Price > VWAP + 0.2× EM (bullish VWAP bias)', 'RSI(5m) > 60 and RSI(15m) > 55', 'Price broke above opening range high', 'Volume confirms breakout (spike OK)'],
+  },
+  '0DTE_DIRECTIONAL_CALL': {
+    description: 'Sell a call credit spread above the market on a clear bearish day. Price is breaking below VWAP with RSI momentum confirming the down-move.',
+    spreadType: 'call_credit_spread',
+    entryWindow: '9:45 – 11:00 AM ET · 2:00 – 3:30 PM ET',
+    setupConditions: ['Price < VWAP – 0.2× EM (bearish VWAP bias)', 'RSI(5m) < 40 and RSI(15m) < 45', 'Price broke below opening range low', 'Volume confirms breakdown (spike OK)'],
+  },
+  '0DTE_MEAN_REVERSION_PUT': {
+    description: 'Sell a put credit spread after a sharp downside overextension. Price has stretched >2% beyond the 1σ expected move low — fade the move, collect credit as it snaps back.',
+    spreadType: 'put_credit_spread',
+    entryWindow: 'Any time (when stretched condition met)',
+    setupConditions: ['Price > 2% below 1σ expected move low', 'RSI(5m) < 25 (oversold extreme)', 'Volume climax / exhaustion candle visible'],
+  },
+  '0DTE_MEAN_REVERSION_CALL': {
+    description: 'Sell a call credit spread after a sharp upside overextension. Price has stretched >2% beyond the 1σ expected move high — fade the move, collect credit on the reversal.',
+    spreadType: 'call_credit_spread',
+    entryWindow: 'Any time (when stretched condition met)',
+    setupConditions: ['Price > 2% above 1σ expected move high', 'RSI(5m) > 75 (overbought extreme)', 'Volume climax / exhaustion candle visible'],
+  },
+};
+
+export function scoreAllIntradayStrategies(inputs: IntradayInputs): IntradayStrategyAssessment[] {
+  const em = calcIntradayEM(inputs.spxPrice, inputs.vix, inputs.minutesRemaining);
+  const emHigh = inputs.spxPrice + em;
+  const emLow  = inputs.spxPrice - em;
+  const impliedVol = inputs.vix / 100;
+
+  const volCrush  = detectVolCrush(inputs, em);
+  const dir       = detectDirectional(inputs, em);
+  const rev       = detectMeanReversion(inputs, em);
+
+  const takeProfitPct = 0.50;
+  const stopLossMult  = 1.5;
+
+  const buildAssessment = (
+    strategyId: IntradayStrategyType,
+    score: number,
+    reasons: string[],
+    warnings: string[],
+    direction: 'put' | 'call',
+    bias: 'bullish' | 'bearish' | 'neutral',
+  ): IntradayStrategyAssessment => {
+    const meta = STRATEGY_META[strategyId];
+    const { tier } = scoreTier(score);
+    const { shortStrike, longStrike, spreadWidth } = selectStrikes(
+      inputs.spxPrice, inputs.vix, inputs.minutesRemaining, direction, emHigh, emLow,
+    );
+    const pop = calcIntradayPOP(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining, direction);
+    const credit = estimateCredit(inputs.spxPrice, shortStrike, longStrike, inputs.vix, inputs.minutesRemaining);
+    const shortDelta = direction === 'put'
+      ? 1 - probAboveStrike(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining)
+      : probAboveStrike(inputs.spxPrice, shortStrike, inputs.vix, inputs.minutesRemaining);
+    const longDelta = direction === 'put'
+      ? 1 - probAboveStrike(inputs.spxPrice, longStrike, inputs.vix, inputs.minutesRemaining)
+      : probAboveStrike(inputs.spxPrice, longStrike, inputs.vix, inputs.minutesRemaining);
+    const longPremium  = Math.round(Math.max(0.05, longDelta  * spreadWidth * 0.35) * 20) / 20;
+    const shortPremium = Math.round((credit + longPremium) * 20) / 20;
+
+    return {
+      strategyId,
+      displayName: {
+        '0DTE_VOL_CRUSH': 'Volatility Crush',
+        '0DTE_DIRECTIONAL_PUT': 'Directional Put Spread',
+        '0DTE_DIRECTIONAL_CALL': 'Directional Call Spread',
+        '0DTE_MEAN_REVERSION_PUT': 'Mean Reversion Put',
+        '0DTE_MEAN_REVERSION_CALL': 'Mean Reversion Call',
+        'NO_TRADE': 'No Trade',
+      }[strategyId] ?? strategyId,
+      description:      meta.description,
+      spreadType:       meta.spreadType,
+      bias,
+      score,
+      tier,
+      isViable:         score >= 3 && inputs.minutesRemaining >= 15,
+      entryWindow:      meta.entryWindow,
+      setupConditions:  meta.setupConditions,
+      metConditions:    reasons,
+      shortStrike,
+      longStrike,
+      spreadWidth,
+      estimatedCredit:  Math.round(credit * 100) / 100,
+      maxRisk:          Math.round((spreadWidth - credit) * 100) / 100,
+      pop:              Math.round(pop * 1000) / 1000,
+      optionType:       direction,
+      shortDelta:       Math.round(shortDelta * 1000) / 1000,
+      longDelta:        Math.round(longDelta  * 1000) / 1000,
+      shortPremium,
+      longPremium,
+      impliedVol,
+      warnings,
+      exitRules: {
+        takeProfitPct,
+        stopLossMult,
+        timeStop: '3:45 PM ET',
+        takeProfitDollar: Math.round(credit * takeProfitPct * 100) / 100,
+        stopLossDollar:   Math.round(credit * stopLossMult  * 100) / 100,
+      },
+    };
+  };
+
+  const results: IntradayStrategyAssessment[] = [
+    buildAssessment('0DTE_VOL_CRUSH',           volCrush.score, volCrush.reasons, volCrush.warnings, 'put', 'neutral'),
+    buildAssessment('0DTE_DIRECTIONAL_PUT',      dir.direction === 'bullish' ? dir.score : 0, dir.reasons, dir.warnings, 'put',  'bullish'),
+    buildAssessment('0DTE_DIRECTIONAL_CALL',     dir.direction === 'bearish' ? dir.score : 0, dir.reasons, dir.warnings, 'call', 'bearish'),
+    buildAssessment('0DTE_MEAN_REVERSION_PUT',   rev.direction === 'fade_low'  ? rev.score : 0, rev.reasons, rev.warnings, 'put',  'bullish'),
+    buildAssessment('0DTE_MEAN_REVERSION_CALL',  rev.direction === 'fade_high' ? rev.score : 0, rev.reasons, rev.warnings, 'call', 'bearish'),
+  ];
+
+  // Sort: viable first, then by score descending
+  return results.sort((a, b) => {
+    if (a.isViable !== b.isViable) return a.isViable ? -1 : 1;
+    return b.score - a.score;
+  });
 }

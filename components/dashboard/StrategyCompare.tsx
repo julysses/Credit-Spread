@@ -171,33 +171,46 @@ function StrategyCardView({ card, onSelect }: { card: StrategyCard; onSelect?: (
               <MiniMetric label="Kelly" value={formatPercent(rec.kellySize)} valueClass="text-blue-400" />
             </div>
 
-            {/* Trade Structure Summary */}
-            <div className="bg-gray-800/40 rounded-lg p-3 space-y-1.5">
-              <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Structure</div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Type</span>
-                <span className="text-white capitalize">{rec.tradeType?.replace(/_/g, ' ')}</span>
+            {/* Trade Structure — full per-leg table */}
+            <div className="bg-gray-800/40 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-xs text-gray-500 uppercase tracking-wider">Trade Structure</span>
+                <span className="text-xs text-gray-600 font-mono">
+                  {rec.daysToExpiry === 0 ? '0DTE' : `${rec.daysToExpiry}d`}
+                  {rec.expiryDate ? ` · ${formatExpiryShort(rec.expiryDate)}` : ''}
+                </span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">DTE</span>
-                <span className="text-white">{rec.daysToExpiry === 0 ? '0-DTE (intraday)' : `${rec.daysToExpiry} days`}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Expiry</span>
-                <span className="text-white font-mono">{rec.expiryDate}</span>
-              </div>
-              {rec.shortLeg && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Short Strike</span>
-                  <span className="text-red-400 font-mono">{rec.shortLeg.strike} {rec.shortLeg.optionType?.toUpperCase()} (Δ{rec.shortLeg.delta?.toFixed(2)})</span>
+
+              {rec.tradeType === 'iron_condor' ? (
+                <div className="space-y-2.5">
+                  <div>
+                    <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Put Spread</p>
+                    <LegRow action="sell" leg={rec.shortLeg} />
+                    <LegRow action="buy"  leg={rec.longLeg} />
+                  </div>
+                  <div className="border-t border-gray-700/40 pt-2.5">
+                    <p className="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Call Spread</p>
+                    <LegRow action="sell" leg={rec.shortLeg2} />
+                    <LegRow action="buy"  leg={rec.longLeg2} />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <LegRow action="sell" leg={rec.shortLeg} />
+                  <LegRow action="buy"  leg={rec.longLeg} />
                 </div>
               )}
-              {rec.longLeg && (
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">Long Strike</span>
-                  <span className="text-green-400 font-mono">{rec.longLeg.strike} {rec.longLeg.optionType?.toUpperCase()} (Δ{rec.longLeg.delta?.toFixed(2)})</span>
+
+              <div className="mt-2.5 pt-2 border-t border-gray-700/40 grid grid-cols-2 gap-x-3 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Net Credit</span>
+                  <span className="text-white font-mono font-semibold">${rec.credit?.toFixed(2)}/sh</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Per Contract</span>
+                  <span className="text-white font-mono font-semibold">${(rec.credit * 100)?.toFixed(0)}</span>
+                </div>
+              </div>
             </div>
 
             {/* Exit Rules */}
@@ -397,4 +410,44 @@ function MiniMetric({ label, value, valueClass }: { label: string; value: string
       <div className={`text-sm font-bold font-mono ${valueClass ?? 'text-white'}`}>{value}</div>
     </div>
   );
+}
+
+// ─── Per-leg row ─────────────────────────────────────────────────────────────
+function LegRow({ action, leg }: { action: 'sell' | 'buy'; leg: any }) {
+  if (!leg) return null;
+  const isSell = action === 'sell';
+  return (
+    <div className="flex items-center gap-1.5 text-xs font-mono py-0.5">
+      {/* Action pill */}
+      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase shrink-0 ${
+        isSell ? 'bg-red-900/60 text-red-400' : 'bg-green-900/60 text-green-400'
+      }`}>
+        {isSell ? 'SELL' : 'BUY '}
+      </span>
+      {/* Strike */}
+      <span className="text-white w-10 text-right">{leg.strike}</span>
+      {/* Option type */}
+      <span className="text-gray-400 uppercase w-7">{leg.optionType?.slice(0, 3) ?? '---'}</span>
+      {/* Delta */}
+      <span className="text-blue-400 w-12">Δ {leg.delta != null ? leg.delta.toFixed(2) : '--'}</span>
+      {/* IV */}
+      {leg.iv != null && leg.iv > 0
+        ? <span className="text-purple-400 w-12">{(leg.iv * 100).toFixed(1)}%</span>
+        : <span className="w-12" />}
+      {/* Premium */}
+      {leg.premium != null && leg.premium > 0
+        ? <span className={`ml-auto ${isSell ? 'text-yellow-400' : 'text-gray-400'}`}>
+            {isSell ? '+' : '−'}${leg.premium.toFixed(2)}
+          </span>
+        : null}
+    </div>
+  );
+}
+
+function formatExpiryShort(isoDate: string): string {
+  if (!isoDate) return '';
+  try {
+    const d = new Date(isoDate + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch { return isoDate; }
 }
