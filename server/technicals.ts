@@ -89,6 +89,92 @@ export function computeMACD(
   };
 }
 
+// ─── Series Variants (for chart rendering) ────────────────────────────────────
+
+/** Rolling SMA aligned 1:1 with closes. Returns null for bars before warmup. */
+export function computeSMASeries(closes: number[], period: number): (number | null)[] {
+  return closes.map((_, i) => {
+    if (i < period - 1) return null;
+    const slice = closes.slice(i - period + 1, i + 1);
+    return slice.reduce((a, b) => a + b, 0) / period;
+  });
+}
+
+/** Rolling RSI(period) aligned 1:1 with closes. Returns null before warmup. */
+export function computeRSISeries(closes: number[], period = 14): (number | null)[] {
+  const result: (number | null)[] = new Array(period).fill(null);
+  if (closes.length <= period) return result;
+
+  const changes = closes.slice(1).map((c, i) => c - closes[i]);
+  const initGains = changes.slice(0, period).map(c => Math.max(c, 0));
+  const initLosses = changes.slice(0, period).map(c => Math.max(-c, 0));
+  let avgGain = initGains.reduce((a, b) => a + b, 0) / period;
+  let avgLoss = initLosses.reduce((a, b) => a + b, 0) / period;
+
+  const rsiAt = (ag: number, al: number) => al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  result.push(rsiAt(avgGain, avgLoss));
+
+  for (let i = period; i < changes.length; i++) {
+    avgGain = (avgGain * (period - 1) + Math.max(changes[i], 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(-changes[i], 0)) / period;
+    result.push(rsiAt(avgGain, avgLoss));
+  }
+
+  return result;
+}
+
+export interface MACDSeriesPoint {
+  macd: number | null;
+  macdSignal: number | null;
+  histogram: number | null;
+}
+
+/** Full MACD series aligned 1:1 with closes. Returns nulls during warmup. */
+export function computeMACDSeries(
+  closes: number[],
+  fast = 12,
+  slow = 26,
+  signal = 9,
+): MACDSeriesPoint[] {
+  const empty = (): MACDSeriesPoint => ({ macd: null, macdSignal: null, histogram: null });
+  if (closes.length < slow) return closes.map(empty);
+
+  // Build full EMA series for fast and slow
+  const emaFastFull: (number | null)[] = new Array(fast - 1).fill(null);
+  const emaSeries = computeEMA(closes, fast);
+  emaFastFull.push(...emaSeries);
+
+  const emaSlowFull: (number | null)[] = new Array(slow - 1).fill(null);
+  emaSlowFull.push(...computeEMA(closes, slow));
+
+  // Build MACD line aligned to closes
+  const macdLine: (number | null)[] = closes.map((_, i) => {
+    const f = emaFastFull[i];
+    const s = emaSlowFull[i];
+    return f != null && s != null ? f - s : null;
+  });
+
+  // Compute signal EMA on the non-null MACD values
+  const macdValues = macdLine.filter((v): v is number => v != null);
+  const signalValues = computeEMA(macdValues, signal);
+
+  // Map signal back — starts at the (slow-1 + signal-1)-th bar of closes
+  const signalStartBar = slow - 1 + signal - 1;
+  const result: MACDSeriesPoint[] = closes.map((_, i) => {
+    const macd = macdLine[i];
+    if (macd == null) return empty();
+    const signalIdx = i - signalStartBar;
+    const sig = signalIdx >= 0 ? (signalValues[signalIdx] ?? null) : null;
+    return {
+      macd,
+      macdSignal: sig,
+      histogram: sig != null ? macd - sig : null,
+    };
+  });
+
+  return result;
+}
+
 // ─── Bias Derivation ──────────────────────────────────────────────────────────
 
 export type BiasSignal = 'bullish' | 'bearish' | 'neutral';
