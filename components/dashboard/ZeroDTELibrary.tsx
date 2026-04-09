@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, CheckCircle2, Circle, ClipboardList, BookOpen, AlertTriangle, Send } from 'lucide-react';
+import { ChevronDown, ChevronRight, CheckCircle2, Circle, ClipboardList, BookOpen, AlertTriangle, Send } from 'lucide-react';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -463,17 +463,9 @@ function RegimeFilterBar({
 
 // ─── Strategy Comparison Table ────────────────────────────────────────────────
 
-function StrategyComparisonTable({
-  strategies,
-  selectedId,
-  onSelect,
-}: {
-  strategies: Strategy[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-}) {
+function StrategyComparisonTable({ strategies }: { strategies: Strategy[] }) {
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4 overflow-x-auto">
+    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 overflow-x-auto">
       <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300 mb-3">Strategy Comparison</h3>
       <table className="w-full text-xs min-w-[700px]">
         <thead>
@@ -485,18 +477,10 @@ function StrategyComparisonTable({
         </thead>
         <tbody>
           {strategies.map((s, i) => (
-            <tr
-              key={s.id}
-              onClick={() => onSelect(s.id)}
-              className={`border-b border-slate-800/50 cursor-pointer transition-colors ${
-                s.id === selectedId ? 'bg-blue-950/30' : 'hover:bg-slate-800/40'
-              }`}
-            >
+            <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/40 transition-colors">
               <td className="py-2 px-2 text-slate-500">{i + 1}</td>
               <td className="py-2 px-2 font-medium text-white">{s.name}</td>
-              <td className="py-2 px-2">
-                <WinRateBadge rate={s.winRate} num={s.winRateNum} />
-              </td>
+              <td className="py-2 px-2"><WinRateBadge rate={s.winRate} num={s.winRateNum} /></td>
               <td className="py-2 px-2 text-slate-400">{s.structure}</td>
               <td className="py-2 px-2 text-slate-300">{s.entryWindow}</td>
               <td className="py-2 px-2 text-slate-400">{s.vixFilter}</td>
@@ -523,56 +507,6 @@ function WinRateBadge({ rate, num }: { rate: string; num: number }) {
     <span className={`border rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cls}`}>
       {rate}
     </span>
-  );
-}
-
-// ─── Strategy Selector (7 tab cards) ─────────────────────────────────────────
-
-function StrategySelector({
-  strategies,
-  selectedId,
-  onSelect,
-}: {
-  strategies: Strategy[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
-      {strategies.map((s, idx) => {
-        const active = s.id === selectedId;
-        return (
-          <button
-            key={s.id}
-            onClick={() => onSelect(s.id)}
-            className={`rounded-xl border p-3 text-left transition-all flex flex-col gap-2 ${
-              active
-                ? 'border-blue-500 bg-blue-950/50 ring-2 ring-blue-500/30 shadow-lg shadow-blue-900/20'
-                : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-800/50'
-            }`}
-          >
-            {/* Index badge */}
-            <div className="flex items-center gap-1.5">
-              <span className={`text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                active ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400'
-              }`}>
-                {idx + 1}
-              </span>
-              <span className={`text-[10px] font-medium ${active ? 'text-blue-400' : 'text-slate-500'}`}>
-                {s.structure}
-              </span>
-            </div>
-            <div className={`text-xs font-bold leading-tight ${active ? 'text-blue-200' : 'text-slate-200'}`}>
-              {s.name}
-            </div>
-            <WinRateBadge rate={s.winRate} num={s.winRateNum} />
-            <div className={`text-[10px] leading-tight ${active ? 'text-blue-400/80' : 'text-slate-500'}`}>
-              {s.entryWindow}
-            </div>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -795,20 +729,21 @@ function TradeLoggerForm({
 }
 
 
-// ─── Strategy Detail Panel ────────────────────────────────────────────────────
+// ─── Strategy Accordion Row ───────────────────────────────────────────────────
 
-function StrategyDetailPanel({ strategy }: { strategy: Strategy }) {
-  const [checked, setChecked] = useState<boolean[]>(strategy.checklist.map(() => false));
+function StrategyAccordionRow({
+  strategy,
+  index,
+  isOpen,
+  onToggle,
+}: {
+  strategy: Strategy;
+  index: number;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const [checked, setChecked] = useState<boolean[]>(() => strategy.checklist.map(() => false));
   const [showLogger, setShowLogger] = useState(false);
-
-  // Reset checklist when strategy changes
-  const prevId = strategy.id;
-  const [currentId, setCurrentId] = useState(prevId);
-  if (currentId !== prevId) {
-    setCurrentId(prevId);
-    setChecked(strategy.checklist.map(() => false));
-    setShowLogger(false);
-  }
 
   const allChecked = checked.every(Boolean);
   const checkedCount = checked.filter(Boolean).length;
@@ -818,148 +753,168 @@ function StrategyDetailPanel({ strategy }: { strategy: Strategy }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* [A] Strategy Header */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <h2 className="text-base font-bold text-white">{strategy.name}</h2>
-          <span className="text-xs border rounded-full px-2 py-0.5 border-blue-700 bg-blue-900/30 text-blue-300">
-            {strategy.structure}
-          </span>
-          <WinRateBadge rate={strategy.winRate} num={strategy.winRateNum} />
-          <span className="text-xs border rounded-full px-2 py-0.5 border-slate-600 bg-slate-800 text-slate-400">
-            Section 1256 (SPX)
-          </span>
-        </div>
-        <p className="text-xs text-slate-400 leading-relaxed">{strategy.philosophy}</p>
-        <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-          <span>Best Entry: <span className="text-slate-300">{strategy.entryWindow}</span></span>
-          <span>·</span>
-          <span>VIX: <span className="text-slate-300">{strategy.vixFilter}</span></span>
-          <span>·</span>
-          <span>GEX: <span className="text-slate-300">{strategy.gexFilter}</span></span>
-        </div>
-      </div>
+    <div>
+      {/* ── Collapsed header row (always visible) ── */}
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-800/50 transition-colors text-left"
+      >
+        <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold shrink-0">
+          {index}
+        </span>
+        <span className="text-sm font-semibold text-slate-100 flex-1 min-w-0">
+          {strategy.name}
+        </span>
+        <WinRateBadge rate={strategy.winRate} num={strategy.winRateNum} />
+        <span className="hidden md:block text-xs text-slate-500 w-24 shrink-0 text-right">{strategy.structure}</span>
+        <span className="hidden lg:block text-xs text-slate-500 w-36 shrink-0 text-right">{strategy.entryWindow}</span>
+        <span className="hidden sm:block text-xs text-slate-500 w-16 shrink-0 text-right">VIX {strategy.vixFilter}</span>
+        {isOpen
+          ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
+          : <ChevronRight size={14} className="text-slate-400 shrink-0" />}
+      </button>
 
-      {/* [B] Entry Parameters */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen size={14} className="text-blue-400" />
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Parameters</h3>
-        </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="text-left py-1.5 px-2 text-slate-400 font-medium w-1/3">Parameter</th>
-              <th className="text-left py-1.5 px-2 text-slate-400 font-medium">Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            {strategy.params.map((p, i) => (
-              <tr key={i} className="border-b border-slate-800/50">
-                <td className="py-2 px-2 text-slate-400">{p.parameter}</td>
-                <td className="py-2 px-2">
-                  <span className="text-slate-200">{p.value}</span>
-                  {p.notes && <span className="text-slate-500 ml-2 text-xs">({p.notes})</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* [C] Entry Checklist */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <ClipboardList size={14} className="text-blue-400" />
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Checklist</h3>
+      {/* ── Expanded inline panel ── */}
+      {isOpen && (
+        <div className="px-4 pb-5 pt-3 bg-slate-900/30 border-t border-slate-800 space-y-4">
+          {/* Header info */}
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-xs border rounded-full px-2 py-0.5 border-blue-700 bg-blue-900/30 text-blue-300">
+                {strategy.structure}
+              </span>
+              <WinRateBadge rate={strategy.winRate} num={strategy.winRateNum} />
+              <span className="text-xs border rounded-full px-2 py-0.5 border-slate-600 bg-slate-800 text-slate-400">
+                Section 1256 (SPX)
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">{strategy.philosophy}</p>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+              <span>Entry: <span className="text-slate-300">{strategy.entryWindow}</span></span>
+              <span>VIX: <span className="text-slate-300">{strategy.vixFilter}</span></span>
+              <span>GEX: <span className="text-slate-300">{strategy.gexFilter}</span></span>
+            </div>
           </div>
-          <span className="text-xs text-slate-500">{checkedCount}/{strategy.checklist.length} confirmed</span>
-        </div>
 
-        <div className="space-y-2 mb-3">
-          {strategy.checklist.map((item, i) => (
+          {/* [B] Entry Parameters */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen size={14} className="text-blue-400" />
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Parameters</h3>
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-700">
+                  <th className="text-left py-1.5 px-2 text-slate-400 font-medium w-1/3">Parameter</th>
+                  <th className="text-left py-1.5 px-2 text-slate-400 font-medium">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strategy.params.map((p, i) => (
+                  <tr key={i} className="border-b border-slate-800/50">
+                    <td className="py-2 px-2 text-slate-400">{p.parameter}</td>
+                    <td className="py-2 px-2">
+                      <span className="text-slate-200">{p.value}</span>
+                      {p.notes && <span className="text-slate-500 ml-2 text-xs">({p.notes})</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* [C] Entry Checklist */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList size={14} className="text-blue-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Checklist</h3>
+              </div>
+              <span className="text-xs text-slate-500">{checkedCount}/{strategy.checklist.length} confirmed</span>
+            </div>
+            <div className="space-y-2 mb-3">
+              {strategy.checklist.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => toggleItem(i)}
+                  className="flex items-start gap-2.5 w-full text-left group"
+                >
+                  {checked[i] ? (
+                    <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <Circle size={16} className="text-slate-600 shrink-0 mt-0.5 group-hover:text-slate-400" />
+                  )}
+                  <span className={`text-xs leading-relaxed ${checked[i] ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                    {item}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {allChecked ? (
+              <div className="flex items-center gap-2 bg-green-950/50 border border-green-700 rounded-lg px-4 py-2.5 text-green-300 font-semibold text-sm">
+                <CheckCircle2 size={16} />
+                CLEARED TO TRADE
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-yellow-950/30 border border-yellow-700/50 rounded-lg px-4 py-2.5 text-yellow-400 text-sm">
+                <AlertTriangle size={14} />
+                {strategy.checklist.length - checkedCount} condition(s) not confirmed — verify before trading
+              </div>
+            )}
+          </div>
+
+          {/* [D] Risk Management */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={14} className="text-orange-400" />
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Risk Management</h3>
+            </div>
+            <ul className="space-y-2">
+              {strategy.risk.map((r, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                  <span className="text-orange-500 mt-0.5 shrink-0">›</span>
+                  {r}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* [E] Quick Setup */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Send size={14} className="text-blue-400" />
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Quick Setup</h3>
+            </div>
+            <ol className="space-y-2">
+              {strategy.setup.map(s => (
+                <li key={s.step} className="flex items-start gap-3 text-xs">
+                  <span className="w-5 h-5 rounded-full bg-blue-900/60 border border-blue-700 flex items-center justify-center text-blue-300 font-bold shrink-0 text-[10px]">
+                    {s.step}
+                  </span>
+                  <span className="text-slate-300 leading-relaxed pt-0.5">{s.text}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* [F] Log This Trade */}
+          {!showLogger ? (
             <button
-              key={i}
-              onClick={() => toggleItem(i)}
-              className="flex items-start gap-2.5 w-full text-left group"
+              onClick={() => setShowLogger(true)}
+              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-600 text-slate-300 hover:text-white text-sm font-medium py-3 rounded-xl transition-all"
             >
-              {checked[i] ? (
-                <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
-              ) : (
-                <Circle size={16} className="text-slate-600 shrink-0 mt-0.5 group-hover:text-slate-400" />
-              )}
-              <span className={`text-xs leading-relaxed ${checked[i] ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
-                {item}
-              </span>
+              <ClipboardList size={15} />
+              Log This Trade → {strategy.name}
             </button>
-          ))}
+          ) : (
+            <TradeLoggerForm
+              strategyId={strategy.id}
+              checkedItems={checkedCount}
+              totalItems={strategy.checklist.length}
+              onClose={() => setShowLogger(false)}
+            />
+          )}
         </div>
-
-        {allChecked ? (
-          <div className="flex items-center gap-2 bg-green-950/50 border border-green-700 rounded-lg px-4 py-2.5 text-green-300 font-semibold text-sm">
-            <CheckCircle2 size={16} />
-            CLEARED TO TRADE
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 bg-yellow-950/30 border border-yellow-700/50 rounded-lg px-4 py-2.5 text-yellow-400 text-sm">
-            <AlertTriangle size={14} />
-            {strategy.checklist.length - checkedCount} condition(s) not confirmed — verify before trading
-          </div>
-        )}
-      </div>
-
-      {/* [D] Risk Management */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertTriangle size={14} className="text-orange-400" />
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Risk Management</h3>
-        </div>
-        <ul className="space-y-2">
-          {strategy.risk.map((r, i) => (
-            <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
-              <span className="text-orange-500 mt-0.5 shrink-0">›</span>
-              {r}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* [E] Quick Setup */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Send size={14} className="text-blue-400" />
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Quick Setup</h3>
-        </div>
-        <ol className="space-y-2">
-          {strategy.setup.map(s => (
-            <li key={s.step} className="flex items-start gap-3 text-xs">
-              <span className="w-5 h-5 rounded-full bg-blue-900/60 border border-blue-700 flex items-center justify-center text-blue-300 font-bold shrink-0 text-[10px]">
-                {s.step}
-              </span>
-              <span className="text-slate-300 leading-relaxed pt-0.5">{s.text}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      {/* [F] Log This Trade */}
-      {!showLogger ? (
-        <button
-          onClick={() => setShowLogger(true)}
-          className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-600 text-slate-300 hover:text-white text-sm font-medium py-3 rounded-xl transition-all"
-        >
-          <ClipboardList size={15} />
-          Log This Trade → {strategy.name}
-        </button>
-      ) : (
-        <TradeLoggerForm
-          strategyId={strategy.id}
-          checkedItems={checkedCount}
-          totalItems={strategy.checklist.length}
-          onClose={() => setShowLogger(false)}
-        />
       )}
     </div>
   );
@@ -968,7 +923,7 @@ function StrategyDetailPanel({ strategy }: { strategy: Strategy }) {
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
 export function ZeroDTELibrary() {
-  const [selectedId, setSelectedId] = useState('BIC');
+  const [openId, setOpenId] = useState<string | null>(null);
   const [regime, setRegime] = useState<RegimeState>({
     vixLevel: '',
     vix1dRelative: 'below',
@@ -977,45 +932,37 @@ export function ZeroDTELibrary() {
   });
   const [showComparison, setShowComparison] = useState(false);
 
-  const selected = STRATEGIES.find(s => s.id === selectedId) ?? STRATEGIES[0];
-
   return (
     <div className="space-y-4">
-      {/* Regime Filter Bar */}
       <RegimeFilterBar regime={regime} onChange={setRegime} />
 
-      {/* Strategy Selector */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-100">Select Strategy</h3>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 border border-blue-700 text-blue-300">
-              {STRATEGIES.length} strategies
-            </span>
-            <span className="text-xs text-slate-500 hidden sm:inline">— click a card to view details</span>
-          </div>
-          <button
-            onClick={() => setShowComparison(s => !s)}
-            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            {showComparison ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            {showComparison ? 'Hide' : 'Show'} Comparison Table
-          </button>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-slate-100">7 Strategies</h3>
+          <span className="text-xs text-slate-500">— click any row to expand details</span>
         </div>
-        <StrategySelector strategies={STRATEGIES} selectedId={selectedId} onSelect={setSelectedId} />
+        <button
+          onClick={() => setShowComparison(s => !s)}
+          className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          <ChevronDown size={12} className={`transition-transform ${showComparison ? 'rotate-180' : ''}`} />
+          {showComparison ? 'Hide' : 'Show'} Comparison Table
+        </button>
       </div>
 
-      {/* Optional Comparison Table */}
-      {showComparison && (
-        <StrategyComparisonTable
-          strategies={STRATEGIES}
-          selectedId={selectedId}
-          onSelect={id => { setSelectedId(id); setShowComparison(false); }}
-        />
-      )}
+      {showComparison && <StrategyComparisonTable strategies={STRATEGIES} />}
 
-      {/* Strategy Detail Panel */}
-      <StrategyDetailPanel key={selected.id} strategy={selected} />
+      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
+        {STRATEGIES.map((strategy, idx) => (
+          <StrategyAccordionRow
+            key={strategy.id}
+            strategy={strategy}
+            index={idx + 1}
+            isOpen={openId === strategy.id}
+            onToggle={() => setOpenId(openId === strategy.id ? null : strategy.id)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
