@@ -119,7 +119,7 @@ function normCdf(x: number): number {
  * Intraday expected move (1-sigma range)
  * EM = S × σ_annual × √(t_minutes / (252 × 390))
  */
-function calcIntradayEM(spxPrice: number, vix: number, minutesRemaining: number): number {
+export function calcIntradayEM(spxPrice: number, vix: number, minutesRemaining: number): number {
   const annualVol = vix / 100;
   return spxPrice * annualVol * Math.sqrt(Math.max(minutesRemaining, 5) / (252 * 390));
 }
@@ -137,7 +137,7 @@ function probAboveStrike(spxPrice: number, strike: number, vix: number, minutesR
 }
 
 /** Estimate credit for a credit spread based on delta/distance */
-function estimateCredit(spxPrice: number, shortStrike: number, longStrike: number, vix: number, minutesRemaining: number): number {
+export function estimateCredit(spxPrice: number, shortStrike: number, longStrike: number, vix: number, minutesRemaining: number): number {
   const T = Math.max(minutesRemaining, 1) / (252 * 390);
   const sigma = vix / 100;
   // Very simplified: approximate as difference in intrinsic probability × spread width
@@ -186,7 +186,7 @@ function selectStrikes(
 // Composite POP model
 // ─────────────────────────────────────────────
 
-function calcIntradayPOP(
+export function calcIntradayPOP(
   spxPrice: number,
   shortStrike: number,
   vix: number,

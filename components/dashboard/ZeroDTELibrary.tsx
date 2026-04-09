@@ -23,6 +23,18 @@ type StrategySuggestion = {
   targetProfit: number | null;
   putBreakeven: number | null;
   callBreakeven: number | null;
+  pop: number;
+  expectedMoveHigh: number;
+  expectedMoveLow: number;
+  impliedVol: number;
+  shortPutDelta: number | null;
+  longPutDelta: number | null;
+  shortCallDelta: number | null;
+  longCallDelta: number | null;
+  shortPutPremium: number | null;
+  longPutPremium: number | null;
+  shortCallPremium: number | null;
+  longCallPremium: number | null;
 };
 
 type Strategy = {
@@ -557,6 +569,56 @@ function WinRateBadge({ rate, num }: { rate: string; num: number }) {
 
 // ─── Trade Logger Form ────────────────────────────────────────────────────────
 
+// ─── IntradayPanel-style helpers (local copies) ───────────────────────────────
+
+function LiveMetricBox({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="bg-gray-900/60 rounded-lg p-2.5 text-center">
+      <div className="text-[10px] text-gray-600 mb-0.5">{label}</div>
+      <div className={`text-sm font-bold font-mono ${valueClass ?? 'text-white'}`}>{value}</div>
+    </div>
+  );
+}
+
+function LiveExitBox({ label, value, sub, color, bg }: { label: string; value: string; sub: string; color: string; bg: string }) {
+  return (
+    <div className={`rounded-lg border p-2.5 text-center ${bg}`}>
+      <div className={`text-xs font-semibold ${color} mb-0.5`}>{label}</div>
+      <div className="text-xs text-white">{value}</div>
+      <div className="text-xs text-gray-500 font-mono">{sub}</div>
+    </div>
+  );
+}
+
+function LiveLegRow({
+  action, strike, optionType, delta, iv, premium,
+}: {
+  action: 'sell' | 'buy';
+  strike: number;
+  optionType: 'put' | 'call';
+  delta?: number | null;
+  iv?: number | null;
+  premium?: number | null;
+}) {
+  const isSell = action === 'sell';
+  return (
+    <div className="grid grid-cols-6 gap-1 items-center py-1 text-xs font-mono border-b border-gray-800/50 last:border-0">
+      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase text-center ${
+        isSell ? 'bg-red-900/60 text-red-400' : 'bg-green-900/60 text-green-400'
+      }`}>{isSell ? 'SELL' : 'BUY'}</span>
+      <span className={`text-right ${isSell ? 'text-red-300' : 'text-green-300'}`}>{strike}</span>
+      <span className="text-gray-400 uppercase">{optionType.slice(0, 3)}</span>
+      <span className="text-blue-400">{delta != null ? `Δ${delta.toFixed(2)}` : '—'}</span>
+      <span className="text-purple-400">{iv != null && iv > 0 ? `${(iv * 100).toFixed(0)}%` : '—'}</span>
+      <span className={`text-right ${isSell ? 'text-yellow-400' : 'text-gray-400'}`}>
+        {premium != null && premium > 0 ? `${isSell ? '+' : '−'}$${premium.toFixed(2)}` : '—'}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function TradeLoggerForm({
   strategyId,
   checkedItems,
@@ -890,129 +952,140 @@ function StrategyAccordionRow({
             </div>
           </div>
 
-          {/* [Live] Live Entry Setup */}
+          {/* [Live] Live Entry Setup — IntradayPanel layout */}
           {suggestion && (() => {
-            const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+            const today = new Date().toLocaleDateString('en-US', {
+              weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+              timeZone: 'America/New_York',
+            });
             const hasPut  = suggestion.shortPutStrike  != null;
             const hasCall = suggestion.shortCallStrike != null;
             const credit  = suggestion.estimatedTotalCredit ?? 0;
-            // Exit prices (what you pay to close = buy back the spread)
-            const exitTP   = credit * 0.5;          // take-profit: buy back at 50% of credit
-            const exitStop = credit;                // stop-loss: buy back at 100% of credit (lose equal to credit)
-            // Strategy-specific time exits
-            const timeExits: Record<string, string> = {
-              BIC:       'Close by 3:45 PM ET (mandatory)',
-              LateEntryIC: 'Hold to 4:00 PM ET settlement',
-              PegIC:     'Close by 3:45 PM ET or at 50% profit',
-              TuesdayPCS:'Hold to 4:00 PM ET expiration',
-              GEXSpread: 'Close by 3:45 PM ET or at 50% profit',
-              VIX1DIC:   'Close by 3:45 PM ET',
-              SchwartzIC:'Hold to 4:00 PM ET settlement',
+            const maxRisk = suggestion.spreadWidth - credit;
+            const popPct  = (suggestion.pop ?? 0) * 100;
+            const popClass = popPct >= 88 ? 'text-green-400' : popPct >= 80 ? 'text-yellow-400' : 'text-red-400';
+
+            const timeExits: Record<string, { time: string; sub: string }> = {
+              BIC:         { time: '3:45 PM ET',    sub: 'Mandatory close' },
+              LateEntryIC: { time: '4:00 PM ET',    sub: 'Hold to settlement' },
+              PegIC:       { time: '3:45 PM ET',    sub: 'Or 50% profit' },
+              TuesdayPCS:  { time: '4:00 PM ET',    sub: 'Hold to expiration' },
+              GEXSpread:   { time: '3:45 PM ET',    sub: 'Or 50% profit' },
+              VIX1DIC:     { time: '3:45 PM ET',    sub: 'Mandatory close' },
+              SchwartzIC:  { time: '4:00 PM ET',    sub: 'Hold to settlement' },
             };
-            const timeExit = timeExits[strategy.id] ?? 'Close by 3:45 PM ET';
+            const timeExit = timeExits[strategy.id] ?? { time: '3:45 PM ET', sub: 'Mandatory close' };
+
             return (
-              <div className="bg-green-950/20 border border-green-800/50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
+              <div className="bg-gray-950/60 border border-gray-700/50 rounded-xl p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
-                    <h3 className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</h3>
+                    <span className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</span>
                   </div>
-                  <span className="text-[10px] text-slate-400 font-medium">SPX · Exp {today} · BS-computed</span>
+                  <span className="text-[10px] text-gray-500 font-mono">{today} · 0DTE</span>
                 </div>
 
-                {/* Credit spread leg display */}
-                <div className="space-y-2 mb-3">
+                {/* 4-col metrics */}
+                <div className="grid grid-cols-4 gap-2">
+                  <LiveMetricBox label="Win Prob"  value={`${popPct.toFixed(1)}%`}    valueClass={popClass} />
+                  <LiveMetricBox label="Credit"    value={`$${credit.toFixed(2)}`}     valueClass="text-white" />
+                  <LiveMetricBox label="Max Risk"  value={`$${maxRisk.toFixed(2)}`}    valueClass="text-red-400" />
+                  <LiveMetricBox label="Width"     value={`${suggestion.spreadWidth} pts`} />
+                </div>
+
+                {/* Trade Structure */}
+                <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">Trade Structure</span>
+                    <span className="text-[10px] text-yellow-400 font-mono">SPX · {today} · 0DTE</span>
+                  </div>
+
+                  {/* Leg table header */}
+                  <div className="grid grid-cols-6 gap-1 text-[10px] text-gray-600 uppercase tracking-wider mb-1 px-0.5">
+                    <span>Action</span>
+                    <span className="text-right">Strike</span>
+                    <span>Type</span>
+                    <span>Delta</span>
+                    <span>IV</span>
+                    <span className="text-right">Est. $</span>
+                  </div>
+
+                  {/* Put spread legs */}
                   {hasPut && (
-                    <div className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2.5">
-                      <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Put Credit Spread</div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
-                            <span className="text-white font-mono font-semibold">SPX {suggestion.shortPutStrike} Put</span>
-                          </div>
-                          <span className="text-green-400 font-semibold">+${(suggestion.estimatedCreditPerSide ?? 0).toFixed(2)} credit</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
-                            <span className="text-slate-300 font-mono">SPX {suggestion.longPutStrike} Put</span>
-                          </div>
-                          <span className="text-slate-500 text-[10px]">hedge leg</span>
-                        </div>
-                      </div>
-                    </div>
+                    <>
+                      <LiveLegRow action="sell" strike={suggestion.shortPutStrike!} optionType="put"
+                        delta={suggestion.shortPutDelta} iv={suggestion.impliedVol} premium={suggestion.shortPutPremium} />
+                      <LiveLegRow action="buy"  strike={suggestion.longPutStrike!}  optionType="put"
+                        delta={suggestion.longPutDelta}  iv={suggestion.impliedVol} premium={suggestion.longPutPremium} />
+                    </>
                   )}
+
+                  {/* Call spread legs (IC only) */}
                   {hasCall && (
-                    <div className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2.5">
-                      <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Call Credit Spread</div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
-                            <span className="text-white font-mono font-semibold">SPX {suggestion.shortCallStrike} Call</span>
-                          </div>
-                          <span className="text-green-400 font-semibold">+${(suggestion.estimatedCreditPerSide ?? 0).toFixed(2)} credit</span>
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
-                            <span className="text-slate-300 font-mono">SPX {suggestion.longCallStrike} Call</span>
-                          </div>
-                          <span className="text-slate-500 text-[10px]">hedge leg</span>
-                        </div>
+                    <>
+                      <LiveLegRow action="sell" strike={suggestion.shortCallStrike!} optionType="call"
+                        delta={suggestion.shortCallDelta} iv={suggestion.impliedVol} premium={suggestion.shortCallPremium} />
+                      <LiveLegRow action="buy"  strike={suggestion.longCallStrike!}  optionType="call"
+                        delta={suggestion.longCallDelta}  iv={suggestion.impliedVol} premium={suggestion.longCallPremium} />
+                    </>
+                  )}
+
+                  {/* Net summary */}
+                  <div className="mt-2 pt-2 border-t border-gray-700/40 grid grid-cols-3 gap-2 text-xs">
+                    <div className="text-center">
+                      <div className="text-gray-600 mb-0.5">Net Credit</div>
+                      <div className="text-white font-mono font-semibold">${credit.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600 mb-0.5">Per Contract</div>
+                      <div className="text-emerald-400 font-mono font-semibold">${(credit * 100).toFixed(0)}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-gray-600 mb-0.5">Width</div>
+                      <div className="text-gray-300 font-mono">{suggestion.spreadWidth} pts</div>
+                    </div>
+                  </div>
+
+                  {/* Expected Move Range */}
+                  <div className="mt-3 pt-2 border-t border-gray-700/40">
+                    <div className="text-[10px] text-gray-500 mb-1.5">1σ Expected Move Range</div>
+                    <div className="flex items-center gap-2">
+                      <div className="bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-xs text-green-400 font-mono flex-1 text-center">
+                        ▲ {suggestion.expectedMoveHigh}
+                      </div>
+                      <div className="text-gray-600 text-xs">1σ</div>
+                      <div className="bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-xs text-red-400 font-mono flex-1 text-center">
+                        ▼ {suggestion.expectedMoveLow}
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* P&L + Exit summary */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs border-t border-green-900/40 pt-3 mb-3">
-                  <div className="bg-slate-900/60 rounded-lg p-2 text-center">
-                    <div className="text-[10px] text-slate-500 mb-0.5">Net Credit</div>
-                    <div className="text-green-400 font-bold">${credit.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-slate-900/60 rounded-lg p-2 text-center">
-                    <div className="text-[10px] text-slate-500 mb-0.5">Width</div>
-                    <div className="text-slate-300 font-bold">{suggestion.spreadWidth} pts</div>
-                  </div>
-                  {suggestion.putBreakeven != null && (
-                    <div className="bg-slate-900/60 rounded-lg p-2 text-center col-span-2">
-                      <div className="text-[10px] text-slate-500 mb-0.5">Breakevens</div>
-                      <div className="text-slate-300 font-bold">
-                        {suggestion.putBreakeven.toFixed(0)}
-                        {suggestion.callBreakeven != null && ` / ${suggestion.callBreakeven.toFixed(0)}`}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Exit plan */}
-                <div className="bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5">
-                  <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">Exit Plan</div>
-                  <div className="space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
-                        <span className="text-slate-300">Take Profit — buy back spreads at</span>
-                      </div>
-                      <span className="text-yellow-400 font-bold">${exitTP.toFixed(2)} debit</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                        <span className="text-slate-300">Stop-Loss — close if spread reaches</span>
-                      </div>
-                      <span className="text-red-400 font-bold">${exitStop.toFixed(2)} debit</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-                        <span className="text-slate-300">Time Exit</span>
-                      </div>
-                      <span className="text-orange-400 font-semibold">{timeExit}</span>
-                    </div>
-                  </div>
+                {/* 3-col Exit Rules */}
+                <div className="grid grid-cols-3 gap-2">
+                  <LiveExitBox
+                    label="Take Profit"
+                    value={`$${(suggestion.targetProfit ?? credit * 0.5).toFixed(2)}`}
+                    sub="50% of credit"
+                    color="text-green-400"
+                    bg="bg-green-500/10 border-green-500/20"
+                  />
+                  <LiveExitBox
+                    label="Stop Loss"
+                    value={`$${(suggestion.stopLoss ?? credit).toFixed(2)}`}
+                    sub={hasCall ? '= total credit' : '1.5× credit'}
+                    color="text-red-400"
+                    bg="bg-red-500/10 border-red-500/20"
+                  />
+                  <LiveExitBox
+                    label="Time Stop"
+                    value={timeExit.time}
+                    sub={timeExit.sub}
+                    color="text-orange-400"
+                    bg="bg-orange-500/10 border-orange-500/20"
+                  />
                 </div>
               </div>
             );
