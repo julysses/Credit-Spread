@@ -436,18 +436,46 @@ function VIXWidget() {
 // ─────────────────────────────────────────────
 // Monte Carlo Simulator Tab
 // ─────────────────────────────────────────────
+function calc0DteDays(): string {
+  try {
+    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const close = new Date(etNow); close.setHours(16, 0, 0, 0);
+    const msLeft = Math.max(close.getTime() - etNow.getTime(), 60000); // min 1 min
+    return (msLeft / (1000 * 60 * 60 * 24)).toFixed(4);
+  } catch { return '0.2500'; }
+}
+
+function calc0DteTimeLabel(): string {
+  try {
+    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const close = new Date(etNow); close.setHours(16, 0, 0, 0);
+    const msLeft = Math.max(close.getTime() - etNow.getTime(), 0);
+    const h = Math.floor(msLeft / 3600000);
+    const m = Math.floor((msLeft % 3600000) / 60000);
+    return h > 0 ? `${h}h ${m}m until close` : `${m}m until close`;
+  } catch { return '0DTE'; }
+}
+
+function calc10DeltaStrike(spx: number, vix: number): string {
+  // 10-delta put ≈ 1.28 daily SDs below spot
+  // daily σ = vix/100 / √252
+  const dailySigma = (vix / 100) / Math.sqrt(252);
+  return Math.round((spx - 1.28 * dailySigma * spx) / 5) * 5 + '';
+}
+
 function MonteCarloSimulator({ spxPrice, iv }: { spxPrice: number; iv: number }) {
   const [params, setParams] = useState({
     spotPrice: spxPrice.toFixed(0),
     impliedVol: (iv * 100).toFixed(1),
-    daysToExpiry: '7',
+    daysToExpiry: calc0DteDays(),
     numSimulations: '10000',
-    shortStrike: (spxPrice * 0.95).toFixed(0),
+    shortStrike: calc10DeltaStrike(spxPrice, iv * 100),
     spreadType: 'put' as 'put' | 'call',
     creditReceived: '1.50',
   });
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const timeLabel = calc0DteTimeLabel();
 
   const runSim = async () => {
     setLoading(true);
@@ -478,14 +506,44 @@ function MonteCarloSimulator({ spxPrice, iv }: { spxPrice: number; iv: number })
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader><CardTitle>Monte Carlo Simulator</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Monte Carlo Simulator</CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-600/40 text-yellow-400 font-medium">
+                0DTE Mode — {timeLabel}
+              </span>
+              <button
+                onClick={() => setParams(p => ({
+                  ...p,
+                  daysToExpiry: calc0DteDays(),
+                  spotPrice: spxPrice.toFixed(0),
+                  impliedVol: (iv * 100).toFixed(1),
+                  shortStrike: calc10DeltaStrike(spxPrice, iv * 100),
+                }))}
+                className="text-xs text-blue-400 hover:text-blue-300 border border-slate-700 rounded px-2 py-0.5 transition-colors"
+              >
+                Reset to 0DTE
+              </button>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <ParamInput label="Spot Price" value={params.spotPrice} onChange={v => setParams(p => ({ ...p, spotPrice: v }))} />
             <ParamInput label="IV (%)" value={params.impliedVol} onChange={v => setParams(p => ({ ...p, impliedVol: v }))} />
-            <ParamInput label="DTE" value={params.daysToExpiry} onChange={v => setParams(p => ({ ...p, daysToExpiry: v }))} />
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">DTE (days)</label>
+              <input
+                type="number"
+                value={params.daysToExpiry}
+                onChange={e => setParams(p => ({ ...p, daysToExpiry: e.target.value }))}
+                step="0.001"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              />
+            </div>
             <ParamInput label="Simulations" value={params.numSimulations} onChange={v => setParams(p => ({ ...p, numSimulations: v }))} />
-            <ParamInput label="Short Strike" value={params.shortStrike} onChange={v => setParams(p => ({ ...p, shortStrike: v }))} />
+            <ParamInput label="Short Strike (10Δ)" value={params.shortStrike} onChange={v => setParams(p => ({ ...p, shortStrike: v }))} />
             <ParamInput label="Credit ($)" value={params.creditReceived} onChange={v => setParams(p => ({ ...p, creditReceived: v }))} />
             <div>
               <label className="text-xs text-gray-500 block mb-1">Type</label>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, CheckCircle2, Circle, ClipboardList, BookOpen, AlertTriangle, Send } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown, ChevronRight, CheckCircle2, Circle, ClipboardList, BookOpen, AlertTriangle, Send, RefreshCw, Zap } from 'lucide-react';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -9,6 +9,21 @@ import { ChevronDown, ChevronRight, CheckCircle2, Circle, ClipboardList, BookOpe
 
 type EntryParam = { parameter: string; value: string; notes?: string };
 type SetupStep  = { step: number; text: string };
+
+type StrategySuggestion = {
+  strategyId: string;
+  shortPutStrike: number | null;
+  longPutStrike: number | null;
+  shortCallStrike: number | null;
+  longCallStrike: number | null;
+  spreadWidth: number;
+  estimatedCreditPerSide: number | null;
+  estimatedTotalCredit: number | null;
+  stopLoss: number | null;
+  targetProfit: number | null;
+  putBreakeven: number | null;
+  callBreakeven: number | null;
+};
 
 type Strategy = {
   id: string;
@@ -334,9 +349,15 @@ function vixColor(vix: number) {
 function RegimeFilterBar({
   regime,
   onChange,
+  loading,
+  lastUpdated,
+  onRefresh,
 }: {
   regime: RegimeState;
   onChange: (r: RegimeState) => void;
+  loading?: boolean;
+  lastUpdated?: number | null;
+  onRefresh?: () => void;
 }) {
   const vix = parseFloat(regime.vixLevel) || 0;
   const vc = vixColor(vix);
@@ -397,9 +418,33 @@ function RegimeFilterBar({
 
   return (
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
-      <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle size={14} className="text-yellow-400" />
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Regime Filter</h3>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={14} className="text-yellow-400" />
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Regime Filter</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {loading ? (
+            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+              <RefreshCw size={10} className="animate-spin" /> Fetching live data…
+            </span>
+          ) : lastUpdated ? (
+            <span className="flex items-center gap-1 text-[10px] text-green-400">
+              <Zap size={10} />
+              Live · {new Date(lastUpdated).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ) : null}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={loading}
+              title="Refresh live data"
+              className="p-1 rounded text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {/* VIX Level */}
@@ -517,25 +562,27 @@ function TradeLoggerForm({
   checkedItems,
   totalItems,
   onClose,
+  prefill,
 }: {
   strategyId: string;
   checkedItems: number;
   totalItems: number;
   onClose: () => void;
+  prefill?: StrategySuggestion | null;
 }) {
   const [form, setForm] = useState({
     vixAtEntry: '',
     vix1dAtEntry: '',
     gexEnvironment: 'positive' as GEXEnv,
     spxVs20sma: 'above' as SPXVsSMA,
-    structureType: 'iron_condor',
-    shortPutStrike: '',
-    longPutStrike: '',
-    shortCallStrike: '',
-    longCallStrike: '',
-    spreadWidth: '',
+    structureType: prefill?.shortCallStrike != null ? 'iron_condor' : 'put_credit_spread',
+    shortPutStrike: prefill?.shortPutStrike?.toString() ?? '',
+    longPutStrike: prefill?.longPutStrike?.toString() ?? '',
+    shortCallStrike: prefill?.shortCallStrike?.toString() ?? '',
+    longCallStrike: prefill?.longCallStrike?.toString() ?? '',
+    spreadWidth: prefill?.spreadWidth?.toString() ?? '',
     entryTime: '',
-    entryCredit: '',
+    entryCredit: prefill?.estimatedTotalCredit?.toFixed(2) ?? '',
     contracts: '1',
     exitTime: '',
     exitDebit: '',
@@ -736,11 +783,13 @@ function StrategyAccordionRow({
   index,
   isOpen,
   onToggle,
+  suggestion,
 }: {
   strategy: Strategy;
   index: number;
   isOpen: boolean;
   onToggle: () => void;
+  suggestion?: StrategySuggestion | null;
 }) {
   const [checked, setChecked] = useState<boolean[]>(() => strategy.checklist.map(() => false));
   const [showLogger, setShowLogger] = useState(false);
@@ -795,6 +844,67 @@ function StrategyAccordionRow({
               <span>GEX: <span className="text-slate-300">{strategy.gexFilter}</span></span>
             </div>
           </div>
+
+          {/* [Live] Live Entry Setup */}
+          {suggestion && (
+            <div className="bg-green-950/20 border border-green-800/50 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</h3>
+                <span className="text-[10px] text-slate-500 ml-auto">BS-computed from current SPX + VIX</span>
+              </div>
+
+              {/* Strike cells */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                {[
+                  { label: 'Short Put', value: suggestion.shortPutStrike, color: 'text-red-300' },
+                  { label: 'Long Put',  value: suggestion.longPutStrike,  color: 'text-slate-300' },
+                  { label: 'Short Call',value: suggestion.shortCallStrike, color: 'text-red-300' },
+                  { label: 'Long Call', value: suggestion.longCallStrike,  color: 'text-slate-300' },
+                ].filter(c => c.value != null).map(c => (
+                  <div key={c.label} className="bg-slate-900/60 rounded-lg p-2.5 text-center border border-slate-800">
+                    <div className="text-[10px] text-slate-500 mb-1">{c.label}</div>
+                    <div className={`text-sm font-bold ${c.color}`}>{c.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* P&L metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs border-t border-green-900/40 pt-3">
+                <div>
+                  <span className="text-slate-500">Est. Credit </span>
+                  <span className="text-green-400 font-bold">
+                    ${suggestion.estimatedTotalCredit?.toFixed(2) ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Stop-Loss </span>
+                  <span className="text-red-400 font-bold">
+                    ${suggestion.stopLoss?.toFixed(2) ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Target </span>
+                  <span className="text-yellow-400 font-bold">
+                    ${suggestion.targetProfit?.toFixed(2) ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Width </span>
+                  <span className="text-slate-300 font-bold">{suggestion.spreadWidth} pts</span>
+                </div>
+                {suggestion.putBreakeven != null && (
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Breakevens </span>
+                    <span className="text-slate-300">
+                      {suggestion.putBreakeven.toFixed(0)}
+                      {suggestion.callBreakeven != null && ` / ${suggestion.callBreakeven.toFixed(0)}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* [B] Entry Parameters */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
@@ -912,12 +1022,26 @@ function StrategyAccordionRow({
               checkedItems={checkedCount}
               totalItems={strategy.checklist.length}
               onClose={() => setShowLogger(false)}
+              prefill={suggestion}
             />
           )}
         </div>
       )}
     </div>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function minutesUntilClose(): number {
+  try {
+    const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const close = new Date(etNow);
+    close.setHours(16, 0, 0, 0);
+    return Math.max((close.getTime() - etNow.getTime()) / 60000, 5);
+  } catch {
+    return 240; // fallback: 4 hours
+  }
 }
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
@@ -931,10 +1055,56 @@ export function ZeroDTELibrary() {
     spxVsSma: 'above',
   });
   const [showComparison, setShowComparison] = useState(false);
+  const [regimeLoading, setRegimeLoading] = useState(false);
+  const [regimeUpdatedAt, setRegimeUpdatedAt] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<Map<string, StrategySuggestion>>(new Map());
+
+  const fetchLive = useCallback(async () => {
+    setRegimeLoading(true);
+    try {
+      // Fetch regime data
+      const regimeRes = await fetch('/api/zero-dte-regime').then(r => r.json());
+      if (regimeRes.success && regimeRes.data) {
+        const d = regimeRes.data;
+        setRegime({
+          vixLevel: d.vixLevel != null ? d.vixLevel.toFixed(2) : '',
+          vix1dRelative: d.vix1dRelative ?? 'at',
+          gexEnv: d.gexEnv ?? 'positive',
+          spxVsSma: d.spxVsSma ?? 'above',
+        });
+        setRegimeUpdatedAt(d.fetchedAt ?? Date.now());
+
+        // Fetch suggestions using live SPX + VIX
+        if (d.spxPrice && d.vixLevel) {
+          const mins = minutesUntilClose();
+          const sugRes = await fetch(
+            `/api/zero-dte-suggestions?spx=${d.spxPrice}&vix=${d.vixLevel}&minutesLeft=${mins.toFixed(0)}`
+          ).then(r => r.json());
+          if (sugRes.success && Array.isArray(sugRes.data)) {
+            const map = new Map<string, StrategySuggestion>();
+            for (const s of sugRes.data) map.set(s.strategyId, s);
+            setSuggestions(map);
+          }
+        }
+      }
+    } catch {
+      // silently ignore — user can still set regime manually
+    } finally {
+      setRegimeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchLive(); }, [fetchLive]);
 
   return (
     <div className="space-y-4">
-      <RegimeFilterBar regime={regime} onChange={setRegime} />
+      <RegimeFilterBar
+        regime={regime}
+        onChange={setRegime}
+        loading={regimeLoading}
+        lastUpdated={regimeUpdatedAt}
+        onRefresh={fetchLive}
+      />
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -960,6 +1130,7 @@ export function ZeroDTELibrary() {
             index={idx + 1}
             isOpen={openId === strategy.id}
             onToggle={() => setOpenId(openId === strategy.id ? null : strategy.id)}
+            suggestion={suggestions.get(strategy.id) ?? null}
           />
         ))}
       </div>
