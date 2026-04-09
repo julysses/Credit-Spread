@@ -1403,7 +1403,7 @@ export function ZeroDTELibrary() {
         if (d.spxPrice && d.vixLevel) {
           const mins = minutesUntilClose();
           const sugRes = await fetch(
-            `/api/zero-dte-suggestions?spx=${d.spxPrice}&vix=${d.vixLevel}&minutesLeft=${mins.toFixed(0)}`
+            `/api/zero-dte-suggestions?spx=${d.spxPrice}&vix=${d.vixLevel}&vix1d=${d.vix1dLevel ?? 0}&minutesLeft=${mins.toFixed(0)}`
           ).then(r => r.json());
           if (sugRes.success && Array.isArray(sugRes.data)) {
             const map = new Map<string, StrategySuggestion>();
