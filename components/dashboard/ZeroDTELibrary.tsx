@@ -538,23 +538,37 @@ function StrategySelector({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 mb-4">
-      {strategies.map(s => {
+    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
+      {strategies.map((s, idx) => {
         const active = s.id === selectedId;
         return (
           <button
             key={s.id}
             onClick={() => onSelect(s.id)}
-            className={`rounded-lg border p-2.5 text-left transition-all ${
+            className={`rounded-xl border p-3 text-left transition-all flex flex-col gap-2 ${
               active
-                ? 'border-blue-500 bg-blue-950/40 ring-1 ring-blue-500/30'
-                : 'border-slate-700 bg-slate-900/40 hover:border-slate-500'
+                ? 'border-blue-500 bg-blue-950/50 ring-2 ring-blue-500/30 shadow-lg shadow-blue-900/20'
+                : 'border-slate-700 bg-slate-900/50 hover:border-slate-500 hover:bg-slate-800/50'
             }`}
           >
-            <div className={`text-xs font-semibold leading-tight mb-1 ${active ? 'text-blue-300' : 'text-slate-200'}`}>
+            {/* Index badge */}
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                active ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400'
+              }`}>
+                {idx + 1}
+              </span>
+              <span className={`text-[10px] font-medium ${active ? 'text-blue-400' : 'text-slate-500'}`}>
+                {s.structure}
+              </span>
+            </div>
+            <div className={`text-xs font-bold leading-tight ${active ? 'text-blue-200' : 'text-slate-200'}`}>
               {s.name}
             </div>
             <WinRateBadge rate={s.winRate} num={s.winRateNum} />
+            <div className={`text-[10px] leading-tight ${active ? 'text-blue-400/80' : 'text-slate-500'}`}>
+              {s.entryWindow}
+            </div>
           </button>
         );
       })}
@@ -972,8 +986,14 @@ export function ZeroDTELibrary() {
 
       {/* Strategy Selector */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Select Strategy</h3>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-slate-100">Select Strategy</h3>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-900/50 border border-blue-700 text-blue-300">
+              {STRATEGIES.length} strategies
+            </span>
+            <span className="text-xs text-slate-500 hidden sm:inline">— click a card to view details</span>
+          </div>
           <button
             onClick={() => setShowComparison(s => !s)}
             className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
