@@ -23,6 +23,7 @@ import {
   Activity,
   BarChart3,
   Clock,
+  Zap,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -634,6 +635,125 @@ const DEFAULT_INPUTS: Inputs = {
   pcrValue: 0.85,
 };
 
+// ─── 0DTE Regime Widget ───────────────────────────────────────────────────────
+
+function ZeroDTERegimeWidget({
+  vixLevel,
+  gexValue,
+  compositeTier,
+  portfolioVolStatus,
+}: {
+  vixLevel: number;
+  gexValue: number;
+  compositeTier: string;
+  portfolioVolStatus: string;
+}) {
+  const vixGreen = vixLevel < 20;
+  const vixYellow = vixLevel >= 20 && vixLevel <= 25;
+  const gexGreen = gexValue > 0;
+  const compositeGreen = compositeTier === 'NO ACTION' || compositeTier === 'YELLOW — Monitor';
+  const compositeOrange = compositeTier === 'ORANGE — Reduce Exposure';
+  const compositeRed = compositeTier === 'RED — Full Hedge' || compositeTier === 'BLACK — Crisis Mode';
+  const volOk = portfolioVolStatus !== 'CRITICAL';
+
+  type Verdict = { label: string; recommend: string; cls: string; dot: string };
+
+  let verdict: Verdict;
+  if (compositeRed) {
+    verdict = {
+      label: 'AVOID 0DTE',
+      recommend: 'Macro risk elevated — Crown score ≥ 5. No premium selling.',
+      cls: 'bg-red-950/60 border-red-700 text-red-400',
+      dot: 'bg-red-500',
+    };
+  } else if (compositeGreen && gexGreen && vixGreen && volOk) {
+    verdict = {
+      label: 'HIGH PROBABILITY',
+      recommend: 'Conditions optimal → Breakeven IC (1 PM+) or Afternoon Peg IC',
+      cls: 'bg-green-950/60 border-green-700 text-green-400',
+      dot: 'bg-green-500',
+    };
+  } else if (compositeOrange && gexGreen) {
+    verdict = {
+      label: 'MODERATE',
+      recommend: 'Reduce size — favor Late-Entry IC (3:55 PM) or skip',
+      cls: 'bg-yellow-950/60 border-yellow-700 text-yellow-400',
+      dot: 'bg-yellow-500',
+    };
+  } else if (!vixGreen || vixYellow) {
+    verdict = {
+      label: 'CAUTION',
+      recommend: 'VIX elevated — only Schwartz Dollar Rule IC post-vol-spike, or skip',
+      cls: 'bg-orange-950/60 border-orange-700 text-orange-400',
+      dot: 'bg-orange-500',
+    };
+  } else {
+    verdict = {
+      label: 'VERIFY REGIME',
+      recommend: 'Mixed signals — check GEX and VIX1D before entering any 0DTE',
+      cls: 'bg-slate-800 border-slate-600 text-slate-300',
+      dot: 'bg-slate-400',
+    };
+  }
+
+  const cells = [
+    {
+      label: 'VIX',
+      value: vixLevel.toFixed(1),
+      dot: vixGreen ? 'bg-green-500' : vixYellow ? 'bg-yellow-500' : 'bg-red-500',
+      note: vixGreen ? '< 20' : vixYellow ? '20–25' : '> 25',
+    },
+    {
+      label: 'GEX',
+      value: gexValue >= 0 ? 'Positive' : 'Negative',
+      dot: gexGreen ? 'bg-green-500' : 'bg-red-500',
+      note: gexGreen ? 'Range compression' : 'Trending regime',
+    },
+    {
+      label: 'Composite',
+      value: compositeTier.split(' ')[0],
+      dot: compositeGreen ? 'bg-green-500' : compositeOrange ? 'bg-orange-500' : 'bg-red-500',
+      note: compositeTier,
+    },
+    {
+      label: 'Portfolio Vol',
+      value: portfolioVolStatus,
+      dot: portfolioVolStatus === 'Normal' ? 'bg-green-500' : portfolioVolStatus === 'Elevated' ? 'bg-yellow-500' : 'bg-red-500',
+      note: portfolioVolStatus === 'Normal' ? '≤ 12%' : portfolioVolStatus === 'Elevated' ? '13–17%' : '≥ 18%',
+    },
+  ];
+
+  return (
+    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Zap size={15} className="text-yellow-400" />
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">0DTE Regime Status</h2>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {cells.map(cell => (
+          <div key={cell.label} className="bg-slate-800/60 rounded-lg p-3">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${cell.dot}`} />
+              <span className="text-xs text-slate-400 font-medium">{cell.label}</span>
+            </div>
+            <div className="text-sm font-semibold text-white">{cell.value}</div>
+            <div className="text-xs text-slate-500 mt-0.5 truncate">{cell.note}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${verdict.cls}`}>
+        <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-0.5 ${verdict.dot}`} />
+        <div>
+          <span className="text-sm font-bold">{verdict.label} — </span>
+          <span className="text-sm">{verdict.recommend}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function SignalStackEngine() {
@@ -1007,6 +1127,14 @@ export function SignalStackEngine() {
             </div>
           </div>
         </div>
+
+        {/* 0DTE REGIME WIDGET */}
+        <ZeroDTERegimeWidget
+          vixLevel={inputs.vixLevel}
+          gexValue={inputs.gexValue}
+          compositeTier={scores.compositeTier}
+          portfolioVolStatus={scores.portfolioVolStatus}
+        />
 
         {/* TACTICAL RESPONSE */}
         <div className={`rounded-xl border-2 p-5 mb-4 ${tierConfig.bgClass} ${tierConfig.borderClass}`}>

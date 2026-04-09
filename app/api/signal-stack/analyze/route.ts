@@ -19,7 +19,14 @@ Format your response exactly as:
 • position sizing guidance based on Kelly/portfolio vol status
 • entry criteria if market not yet at ideal level
 
-[RISK CAVEAT] — one sentence on what would invalidate this thesis`;
+[RISK CAVEAT] — one sentence on what would invalidate this thesis
+
+[0DTE VERDICT] — assess 0DTE credit spread viability based on the regime data provided:
+- If Crown macro score ≤ 2 AND GEX is positive AND VIX < 25: output "HIGH PROBABILITY — [name the best-fit strategy: Breakeven Iron Condor if entry time is 1 PM+, Late-Entry IC if near close, or Afternoon Peg IC if 1–2:45 PM range]"
+- If Crown macro score 3–4 AND GEX is positive: output "MODERATE — reduce size, favor Late-Entry IC (3:55 PM) or Breakeven IC"
+- If Crown macro score ≥ 5 OR GEX is negative AND macro score ≥ 3: output "AVOID 0DTE — Crown score elevated, macro risk not supportive of premium selling"
+- If VIX > 25 AND macro score ≤ 4: output "CAUTION — VIX elevated; only consider GEX-Anchored or Schwartz Dollar Rule IC post-volatility spike"
+Be concise. One sentence verdict plus one sentence rationale.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
