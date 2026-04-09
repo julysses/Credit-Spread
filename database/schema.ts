@@ -299,6 +299,52 @@ export const tradeLog = pgTable('trade_log', {
 }));
 
 // ─────────────────────────────────────────────
+// 0DTE Trade Log
+// ─────────────────────────────────────────────
+export const zeroDteTrades = pgTable('zero_dte_trades', {
+  id:                  serial('id').primaryKey(),
+  createdAt:           timestamp('created_at').defaultNow().notNull(),
+  strategyName:        varchar('strategy_name', { length: 50 }).notNull(),
+  // Regime at entry
+  vixAtEntry:          real('vix_at_entry'),
+  vix1dAtEntry:        real('vix1d_at_entry'),
+  vix1d20dAvg:         real('vix1d_20d_avg'),
+  gexEnvironment:      varchar('gex_environment', { length: 20 }),
+  spxVs20sma:          varchar('spx_vs_20sma', { length: 10 }),
+  potrValue:           real('potr_value'),
+  // Structure
+  underlying:          varchar('underlying', { length: 10 }).default('SPX'),
+  expirationDate:      varchar('expiration_date', { length: 20 }),
+  structureType:       varchar('structure_type', { length: 30 }),
+  shortPutStrike:      real('short_put_strike'),
+  longPutStrike:       real('long_put_strike'),
+  shortCallStrike:     real('short_call_strike'),
+  longCallStrike:      real('long_call_strike'),
+  spreadWidth:         real('spread_width'),
+  // Execution
+  entryTime:           varchar('entry_time', { length: 10 }),
+  entryCredit:         real('entry_credit'),
+  maxRisk:             real('max_risk'),
+  rewardRiskRatio:     real('reward_risk_ratio'),
+  contracts:           integer('contracts').default(1),
+  totalCreditReceived: real('total_credit_received'),
+  // Exit
+  exitTime:            varchar('exit_time', { length: 10 }),
+  exitDebit:           real('exit_debit'),
+  outcome:             varchar('outcome', { length: 30 }),
+  pnlPerContract:      real('pnl_per_contract'),
+  totalPnl:            real('total_pnl'),
+  // Checklist compliance
+  allConditionsMet:    boolean('all_conditions_met'),
+  conditionsSkipped:   text('conditions_skipped'),
+  notes:               text('notes'),
+  signalSnapshotId:    integer('signal_snapshot_id').references(() => signalSnapshots.id),
+}, (table) => ({
+  zeroDteCreatedIdx: index('zero_dte_trades_created_idx').on(table.createdAt),
+  zeroDteStrategyIdx: index('zero_dte_trades_strategy_idx').on(table.strategyName),
+}));
+
+// ─────────────────────────────────────────────
 // Morning Briefings
 // ─────────────────────────────────────────────
 export const morningBriefings = pgTable('morning_briefings', {

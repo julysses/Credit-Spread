@@ -1,0 +1,37 @@
+CREATE TABLE IF NOT EXISTS "zero_dte_trades" (
+  "id" serial PRIMARY KEY NOT NULL,
+  "created_at" timestamp DEFAULT now() NOT NULL,
+  "strategy_name" varchar(50) NOT NULL,
+  "vix_at_entry" real,
+  "vix1d_at_entry" real,
+  "vix1d_20d_avg" real,
+  "gex_environment" varchar(20),
+  "spx_vs_20sma" varchar(10),
+  "potr_value" real,
+  "underlying" varchar(10) DEFAULT 'SPX',
+  "expiration_date" varchar(20),
+  "structure_type" varchar(30),
+  "short_put_strike" real,
+  "long_put_strike" real,
+  "short_call_strike" real,
+  "long_call_strike" real,
+  "spread_width" real,
+  "entry_time" varchar(10),
+  "entry_credit" real,
+  "max_risk" real,
+  "reward_risk_ratio" real,
+  "contracts" integer DEFAULT 1,
+  "total_credit_received" real,
+  "exit_time" varchar(10),
+  "exit_debit" real,
+  "outcome" varchar(30),
+  "pnl_per_contract" real,
+  "total_pnl" real,
+  "all_conditions_met" boolean,
+  "conditions_skipped" text,
+  "notes" text,
+  "signal_snapshot_id" integer REFERENCES "signal_snapshots"("id")
+);
+
+CREATE INDEX IF NOT EXISTS "zero_dte_trades_created_idx" ON "zero_dte_trades" ("created_at");
+CREATE INDEX IF NOT EXISTS "zero_dte_trades_strategy_idx" ON "zero_dte_trades" ("strategy_name");
