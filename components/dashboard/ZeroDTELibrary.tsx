@@ -570,7 +570,9 @@ function TradeLoggerForm({
   onClose: () => void;
   prefill?: StrategySuggestion | null;
 }) {
+  const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
   const [form, setForm] = useState({
+    expirationDate: todayISO,
     vixAtEntry: '',
     vix1dAtEntry: '',
     gexEnvironment: 'positive' as GEXEnv,
@@ -602,6 +604,7 @@ function TradeLoggerForm({
     try {
       const body = {
         strategyName: strategyId,
+        expirationDate: form.expirationDate || null,
         vixAtEntry: form.vixAtEntry ? parseFloat(form.vixAtEntry) : null,
         vix1dAtEntry: form.vix1dAtEntry ? parseFloat(form.vix1dAtEntry) : null,
         gexEnvironment: form.gexEnvironment,
@@ -673,6 +676,47 @@ function TradeLoggerForm({
         <button onClick={onClose} className="text-slate-500 hover:text-white text-lg leading-none">×</button>
       </div>
 
+      {/* Credit spread summary */}
+      {(form.shortPutStrike || form.shortCallStrike) && (
+        <div className="bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2.5 mb-3">
+          <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">
+            Credit Spread Structure · SPX · Exp {form.expirationDate}
+          </div>
+          <div className="space-y-1">
+            {form.shortPutStrike && (
+              <>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
+                  <span className="text-white font-mono">SPX {form.expirationDate} {form.shortPutStrike} Put</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
+                  <span className="text-slate-400 font-mono">SPX {form.expirationDate} {form.longPutStrike || '—'} Put</span>
+                </div>
+              </>
+            )}
+            {form.shortCallStrike && (
+              <>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
+                  <span className="text-white font-mono">SPX {form.expirationDate} {form.shortCallStrike} Call</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
+                  <span className="text-slate-400 font-mono">SPX {form.expirationDate} {form.longCallStrike || '—'} Call</span>
+                </div>
+              </>
+            )}
+            {form.entryCredit && (
+              <div className="text-xs text-slate-500 mt-1 pt-1 border-t border-slate-800">
+                Net Credit: <span className="text-green-400 font-semibold">${form.entryCredit}</span>
+                {form.contracts && form.contracts !== '1' && <span> × {form.contracts} contracts</span>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {checkedItems < totalItems && (
         <div className="flex items-center gap-2 bg-yellow-950/40 border border-yellow-700/50 rounded px-3 py-2 mb-3 text-xs text-yellow-400">
           <AlertTriangle size={12} />
@@ -681,6 +725,7 @@ function TradeLoggerForm({
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+        <Field label="Expiration Date" fieldKey="expirationDate" type="date" />
         <Field label="VIX at Entry" fieldKey="vixAtEntry" type="number" placeholder="18.5" />
         <Field label="VIX1D at Entry" fieldKey="vix1dAtEntry" type="number" placeholder="22.1" />
         <div>
@@ -695,12 +740,12 @@ function TradeLoggerForm({
             <option value="call_credit_spread">Call Credit Spread</option>
           </select>
         </div>
-        <Field label="Short Put Strike" fieldKey="shortPutStrike" type="number" placeholder="5250" />
-        <Field label="Long Put Strike" fieldKey="longPutStrike" type="number" placeholder="5220" />
-        <Field label="Short Call Strike" fieldKey="shortCallStrike" type="number" placeholder="5350" />
-        <Field label="Long Call Strike" fieldKey="longCallStrike" type="number" placeholder="5380" />
-        <Field label="Spread Width" fieldKey="spreadWidth" type="number" placeholder="30" />
-        <Field label="Entry Credit ($)" fieldKey="entryCredit" type="number" placeholder="1.50" />
+        <Field label="SELL Put Strike" fieldKey="shortPutStrike" type="number" placeholder="5250" />
+        <Field label="BUY Put Strike" fieldKey="longPutStrike" type="number" placeholder="5220" />
+        <Field label="SELL Call Strike" fieldKey="shortCallStrike" type="number" placeholder="5350" />
+        <Field label="BUY Call Strike" fieldKey="longCallStrike" type="number" placeholder="5380" />
+        <Field label="Spread Width (pts)" fieldKey="spreadWidth" type="number" placeholder="30" />
+        <Field label="Net Credit ($)" fieldKey="entryCredit" type="number" placeholder="1.50" />
         <Field label="Entry Time" fieldKey="entryTime" type="time" />
         <Field label="Contracts" fieldKey="contracts" type="number" placeholder="1" />
         <div>
@@ -846,65 +891,132 @@ function StrategyAccordionRow({
           </div>
 
           {/* [Live] Live Entry Setup */}
-          {suggestion && (
-            <div className="bg-green-950/20 border border-green-800/50 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</h3>
-                <span className="text-[10px] text-slate-500 ml-auto">BS-computed from current SPX + VIX</span>
-              </div>
-
-              {/* Strike cells */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-                {[
-                  { label: 'Short Put', value: suggestion.shortPutStrike, color: 'text-red-300' },
-                  { label: 'Long Put',  value: suggestion.longPutStrike,  color: 'text-slate-300' },
-                  { label: 'Short Call',value: suggestion.shortCallStrike, color: 'text-red-300' },
-                  { label: 'Long Call', value: suggestion.longCallStrike,  color: 'text-slate-300' },
-                ].filter(c => c.value != null).map(c => (
-                  <div key={c.label} className="bg-slate-900/60 rounded-lg p-2.5 text-center border border-slate-800">
-                    <div className="text-[10px] text-slate-500 mb-1">{c.label}</div>
-                    <div className={`text-sm font-bold ${c.color}`}>{c.value}</div>
+          {suggestion && (() => {
+            const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' });
+            const hasPut  = suggestion.shortPutStrike  != null;
+            const hasCall = suggestion.shortCallStrike != null;
+            const credit  = suggestion.estimatedTotalCredit ?? 0;
+            // Exit prices (what you pay to close = buy back the spread)
+            const exitTP   = credit * 0.5;          // take-profit: buy back at 50% of credit
+            const exitStop = credit;                // stop-loss: buy back at 100% of credit (lose equal to credit)
+            // Strategy-specific time exits
+            const timeExits: Record<string, string> = {
+              BIC:       'Close by 3:45 PM ET (mandatory)',
+              LateEntryIC: 'Hold to 4:00 PM ET settlement',
+              PegIC:     'Close by 3:45 PM ET or at 50% profit',
+              TuesdayPCS:'Hold to 4:00 PM ET expiration',
+              GEXSpread: 'Close by 3:45 PM ET or at 50% profit',
+              VIX1DIC:   'Close by 3:45 PM ET',
+              SchwartzIC:'Hold to 4:00 PM ET settlement',
+            };
+            const timeExit = timeExits[strategy.id] ?? 'Close by 3:45 PM ET';
+            return (
+              <div className="bg-green-950/20 border border-green-800/50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</h3>
                   </div>
-                ))}
-              </div>
+                  <span className="text-[10px] text-slate-400 font-medium">SPX · Exp {today} · BS-computed</span>
+                </div>
 
-              {/* P&L metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs border-t border-green-900/40 pt-3">
-                <div>
-                  <span className="text-slate-500">Est. Credit </span>
-                  <span className="text-green-400 font-bold">
-                    ${suggestion.estimatedTotalCredit?.toFixed(2) ?? '—'}
-                  </span>
+                {/* Credit spread leg display */}
+                <div className="space-y-2 mb-3">
+                  {hasPut && (
+                    <div className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2.5">
+                      <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Put Credit Spread</div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
+                            <span className="text-white font-mono font-semibold">SPX {suggestion.shortPutStrike} Put</span>
+                          </div>
+                          <span className="text-green-400 font-semibold">+${(suggestion.estimatedCreditPerSide ?? 0).toFixed(2)} credit</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
+                            <span className="text-slate-300 font-mono">SPX {suggestion.longPutStrike} Put</span>
+                          </div>
+                          <span className="text-slate-500 text-[10px]">hedge leg</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {hasCall && (
+                    <div className="bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2.5">
+                      <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">Call Credit Spread</div>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-green-700/60 text-green-300 text-[10px] font-bold px-1.5 py-0.5 rounded">SELL</span>
+                            <span className="text-white font-mono font-semibold">SPX {suggestion.shortCallStrike} Call</span>
+                          </div>
+                          <span className="text-green-400 font-semibold">+${(suggestion.estimatedCreditPerSide ?? 0).toFixed(2)} credit</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
+                            <span className="text-slate-300 font-mono">SPX {suggestion.longCallStrike} Call</span>
+                          </div>
+                          <span className="text-slate-500 text-[10px]">hedge leg</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-slate-500">Stop-Loss </span>
-                  <span className="text-red-400 font-bold">
-                    ${suggestion.stopLoss?.toFixed(2) ?? '—'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Target </span>
-                  <span className="text-yellow-400 font-bold">
-                    ${suggestion.targetProfit?.toFixed(2) ?? '—'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Width </span>
-                  <span className="text-slate-300 font-bold">{suggestion.spreadWidth} pts</span>
-                </div>
-                {suggestion.putBreakeven != null && (
-                  <div className="col-span-2">
-                    <span className="text-slate-500">Breakevens </span>
-                    <span className="text-slate-300">
-                      {suggestion.putBreakeven.toFixed(0)}
-                      {suggestion.callBreakeven != null && ` / ${suggestion.callBreakeven.toFixed(0)}`}
-                    </span>
+
+                {/* P&L + Exit summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs border-t border-green-900/40 pt-3 mb-3">
+                  <div className="bg-slate-900/60 rounded-lg p-2 text-center">
+                    <div className="text-[10px] text-slate-500 mb-0.5">Net Credit</div>
+                    <div className="text-green-400 font-bold">${credit.toFixed(2)}</div>
                   </div>
-                )}
+                  <div className="bg-slate-900/60 rounded-lg p-2 text-center">
+                    <div className="text-[10px] text-slate-500 mb-0.5">Width</div>
+                    <div className="text-slate-300 font-bold">{suggestion.spreadWidth} pts</div>
+                  </div>
+                  {suggestion.putBreakeven != null && (
+                    <div className="bg-slate-900/60 rounded-lg p-2 text-center col-span-2">
+                      <div className="text-[10px] text-slate-500 mb-0.5">Breakevens</div>
+                      <div className="text-slate-300 font-bold">
+                        {suggestion.putBreakeven.toFixed(0)}
+                        {suggestion.callBreakeven != null && ` / ${suggestion.callBreakeven.toFixed(0)}`}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Exit plan */}
+                <div className="bg-slate-950/60 border border-slate-700 rounded-lg px-3 py-2.5">
+                  <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">Exit Plan</div>
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
+                        <span className="text-slate-300">Take Profit — buy back spreads at</span>
+                      </div>
+                      <span className="text-yellow-400 font-bold">${exitTP.toFixed(2)} debit</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span className="text-slate-300">Stop-Loss — close if spread reaches</span>
+                      </div>
+                      <span className="text-red-400 font-bold">${exitStop.toFixed(2)} debit</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                        <span className="text-slate-300">Time Exit</span>
+                      </div>
+                      <span className="text-orange-400 font-semibold">{timeExit}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* [B] Entry Parameters */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
