@@ -35,6 +35,7 @@ type StrategySuggestion = {
   longPutPremium: number | null;
   shortCallPremium: number | null;
   longCallPremium: number | null;
+  priceSource: 'live' | 'bs';
 };
 
 type Strategy = {
@@ -984,7 +985,12 @@ function StrategyAccordionRow({
                     <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
                     <span className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</span>
                   </div>
-                  <span className="text-[10px] text-gray-500 font-mono">{today} · 0DTE</span>
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    {today} · 0DTE ·{' '}
+                    <span className={suggestion.priceSource === 'live' ? 'text-green-400' : 'text-yellow-500'}>
+                      {suggestion.priceSource === 'live' ? 'Bid/Ask Mid' : 'BS Model'}
+                    </span>
+                  </span>
                 </div>
 
                 {/* 4-col metrics */}
