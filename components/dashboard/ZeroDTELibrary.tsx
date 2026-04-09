@@ -10,6 +10,33 @@ import { ChevronDown, ChevronRight, CheckCircle2, Circle, ClipboardList, BookOpe
 type EntryParam = { parameter: string; value: string; notes?: string };
 type SetupStep  = { step: number; text: string };
 
+// autoKey values that can be evaluated from live regime data or the suggestion
+type AutoConditionKey =
+  | 'gex_positive'
+  | 'vix_below_25'
+  | 'vix_below_20'
+  | 'vix_15_25'
+  | 'vix1d_above_avg'
+  | 'vix1d_at_or_below'
+  | 'spx_above_sma'
+  | 'is_tuesday'
+  | 'time_after_10am'
+  | 'time_after_1030am'
+  | 'time_after_11am'
+  | 'time_after_1pm'
+  | 'time_11am_1pm'
+  | 'time_3_55_3_58'
+  | 'equal_premium_sides'    // |shortPutPremium - shortCallPremium| ≤ $0.30
+  | 'schwartz_dollar_rule'   // each side premium ≈ $1.00
+  | 'min_credit_15pct'       // credit ≥ 15% of spread width
+  | 'tuesday_min_credit'     // credit ≥ $1.80
+  | 'rr_48pct';              // credit / (width - credit) ≥ 48%
+
+type ChecklistItem = {
+  text: string;
+  autoKey?: AutoConditionKey; // if set, evaluated automatically from live data
+};
+
 type StrategySuggestion = {
   strategyId: string;
   shortPutStrike: number | null;
@@ -49,7 +76,7 @@ type Strategy = {
   gexFilter: string;
   philosophy: string;
   params: EntryParam[];
-  checklist: string[];
+  checklist: ChecklistItem[];
   risk: string[];
   setup: SetupStep[];
 };
@@ -78,12 +105,12 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'GEX Filter',        value: 'Positive GEX preferred (range compression)' },
     ],
     checklist: [
-      'GEX is positive (market range-bound environment)',
-      'VIX is below 25',
-      'SPX is not in a news catalyst hour (Fed, CPI, NFP)',
-      'Time is 1:00 PM EST or later',
-      'Equal premium collected on both put and call side',
-      'Stop-loss orders pre-set on both sides at order entry',
+      { text: 'GEX is positive (market range-bound environment)',             autoKey: 'gex_positive' },
+      { text: 'VIX is below 25',                                              autoKey: 'vix_below_25' },
+      { text: 'Time is 1:00 PM EST or later',                                 autoKey: 'time_after_1pm' },
+      { text: 'Equal premium collected on both put and call side',            autoKey: 'equal_premium_sides' },
+      { text: 'SPX not in a news catalyst hour (Fed, CPI, NFP) — verify manually' },
+      { text: 'Stop-loss orders pre-set on both sides at order entry' },
     ],
     risk: [
       'Stop-Loss: Set separately on each side equal to total IC premium collected',
@@ -120,11 +147,11 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'GEX Filter',   value: 'Any — very little time for regime to matter' },
     ],
     checklist: [
-      'Clock is between 3:55 and 3:58 PM EST',
-      'VIX below 25 (below 20 = ideal)',
-      'SPX is not in a climactic directional move in final 30 min',
-      'Strikes selected 0.5–0.8% OTM from current price',
-      'Credit collected is meaningful (min 15% of spread width)',
+      { text: 'Clock is between 3:55 and 3:58 PM EST',                       autoKey: 'time_3_55_3_58' },
+      { text: 'VIX below 25 (below 20 = ideal)',                              autoKey: 'vix_below_25' },
+      { text: 'Credit collected ≥ 15% of spread width',                       autoKey: 'min_credit_15pct' },
+      { text: 'SPX not in a climactic directional move in final 30 min — verify manually' },
+      { text: 'Confirm bid-ask spreads are tight (≤$0.15 per spread)' },
     ],
     risk: [
       'Max Loss = width of spread minus credit received',
@@ -158,11 +185,11 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'Min Reward/Risk', value: '48–51% (must meet threshold — do not trade below)', notes: '64.4% R/R at 2:44 PM → 68% win rate' },
     ],
     checklist: [
-      'Time is between 1:00 and 2:45 PM EST',
-      'Reward/Risk ratio is ≥48% (credit / max loss at least 48%)',
-      'Both strikes are 0.2–0.3% OTM from current SPX price',
-      'VIX is not in backwardation (acute stress signal = skip)',
-      'No major macro print due in next 2 hours',
+      { text: 'Time is between 1:00 and 2:45 PM EST',                        autoKey: 'time_after_1pm' },
+      { text: 'GEX is positive (range compression expected)',                 autoKey: 'gex_positive' },
+      { text: 'Reward/Risk ratio is ≥48% (credit / (width − credit) ≥ 48%)', autoKey: 'rr_48pct' },
+      { text: 'VIX is not in backwardation (acute stress = skip) — verify manually' },
+      { text: 'No major macro print due in next 2 hours — verify manually' },
     ],
     risk: [
       'Stop-Loss: 2× credit received (collect $196 → stop at $392 debit)',
@@ -199,11 +226,12 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'Hold',             value: "To expiration — no stops, no profit targets", notes: 'Avg win $195 | Avg loss $271 | Expectancy +$61/trade' },
     ],
     checklist: [
-      'It is Tuesday',
-      "Tuesday's POTR is ≥50% (check AlphaCrunching.com each weekend)",
-      'SPX is above its 20-day simple moving average (daily chart)',
-      '5-EMA is above 40-EMA on the 1-minute SPX chart between 10:30–11:00 AM',
-      'Credit received is ≥$1.80 for the 5-point spread',
+      { text: 'It is Tuesday',                                                autoKey: 'is_tuesday' },
+      { text: 'SPX is above its 20-day simple moving average',                autoKey: 'spx_above_sma' },
+      { text: 'Entry time is between 10:30 and 11:00 AM EST',                autoKey: 'time_after_1030am' },
+      { text: 'Credit received is ≥$1.80 for the 5-point spread',            autoKey: 'tuesday_min_credit' },
+      { text: "Tuesday POTR ≥50% (check AlphaCrunching.com each weekend) — verify manually" },
+      { text: '5-EMA above 40-EMA on 1-min chart at 10:30–11:00 AM — verify manually' },
     ],
     risk: [
       'Management: None — hold to expiration (no intraday stops, no targets)',
@@ -239,13 +267,12 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'Data Sources',                value: 'SpotGamma TRACE, Barchart.com, OptionAlpha GEX' },
     ],
     checklist: [
-      'Net GEX sign confirmed (SpotGamma or Barchart)',
-      '[Positive GEX] SPX is above the HVL for the day',
-      '[Positive GEX] Price has pulled back toward Put Wall — not at the wall itself',
-      '[Negative GEX] SPX has made a sharp rally from the open (extended move)',
-      '[Negative GEX] Price approaching the Call Wall level',
-      'VIX is not in acute spike mode (rising fast = skip)',
-      'Entry time is 10:00 AM or later (avoid first 30-min chaos)',
+      { text: 'GEX is positive (dealers long gamma → range compression)',     autoKey: 'gex_positive' },
+      { text: 'SPX is above its 20-day SMA (bullish trend confirmation)',     autoKey: 'spx_above_sma' },
+      { text: 'VIX1D is below its 20-day average (compressed near-term vol)', autoKey: 'vix1d_at_or_below' },
+      { text: 'Entry time is 10:00 AM or later (avoid first 30-min chaos)',   autoKey: 'time_after_10am' },
+      { text: 'Price has pulled back toward Put Wall — not at the wall itself (verify manually)' },
+      { text: 'VIX not in acute spike mode (rising fast = skip) — verify manually' },
     ],
     risk: [
       'Stop-Loss: 2× credit received',
@@ -278,11 +305,12 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'VIX1D Data',    value: 'CBOE VIX1D index (ticker: VIX1D) on TradingView or CBOE.com', notes: '≥20% above avg = max size; near avg = half size' },
     ],
     checklist: [
-      'VIX1D is above its 20-day moving average',
-      'VIX1D is NOT in a spike above 30 (extreme volatility = skip)',
-      'GEX is positive (supports range-bound outcome)',
-      'SPX is not in a gap-and-go continuation from open',
-      'Spread credit meets minimum R/R threshold (≥15% of wing width)',
+      { text: 'VIX1D is above its 20-day average (premium-rich environment)', autoKey: 'vix1d_above_avg' },
+      { text: 'GEX is positive (supports range-bound outcome)',                autoKey: 'gex_positive' },
+      { text: 'SPX is above the 20-day SMA',                                  autoKey: 'spx_above_sma' },
+      { text: 'Spread credit meets ≥15% of wing width threshold',             autoKey: 'min_credit_15pct' },
+      { text: 'VIX1D not in spike above 30 (extreme vol = skip) — verify manually' },
+      { text: 'SPX not in gap-and-go continuation from open — verify manually' },
     ],
     risk: [
       'Max Loss: 1–2% per trade, 3–5% daily limit',
@@ -318,11 +346,11 @@ const STRATEGIES: Strategy[] = [
       { parameter: 'Risk:Reward',    value: 'Approximately 9:1 per spread leg' },
     ],
     checklist: [
-      'VIX spiked earlier in the session and is now declining',
-      'Market opened with high volatility and is now narrowing',
-      'Time is between 11:00 AM and 1:00 PM EST',
-      'Each 10-point spread is yielding approximately $1.00 in premium',
-      'Total IC credit is approximately $2.00',
+      { text: 'Time is between 11:00 AM and 1:00 PM EST',                    autoKey: 'time_11am_1pm' },
+      { text: 'Each 10-point spread yielding ~$1.00 premium (Dollar Rule)',   autoKey: 'schwartz_dollar_rule' },
+      { text: 'Total IC credit is approximately $2.00',                       autoKey: 'min_credit_15pct' },
+      { text: 'VIX spiked at open and is now declining — verify manually' },
+      { text: 'Market volatility is narrowing (not expanding) — verify manually' },
     ],
     risk: [
       'Each side is sized as an independent 9:1 bet — losing one side = near breakeven',
@@ -884,6 +912,50 @@ function TradeLoggerForm({
 }
 
 
+// ─── Checklist auto-evaluator ─────────────────────────────────────────────────
+
+function evalAutoCondition(
+  key: AutoConditionKey,
+  regime: RegimeState,
+  suggestion: StrategySuggestion | null,
+): boolean {
+  const vix = parseFloat(regime.vixLevel) || 0;
+  const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const etMin = etNow.getHours() * 60 + etNow.getMinutes();
+  const credit = suggestion?.estimatedTotalCredit ?? 0;
+  const width  = suggestion?.spreadWidth ?? 0;
+
+  switch (key) {
+    case 'gex_positive':       return regime.gexEnv === 'positive';
+    case 'vix_below_25':       return vix > 0 && vix < 25;
+    case 'vix_below_20':       return vix > 0 && vix < 20;
+    case 'vix_15_25':          return vix >= 15 && vix <= 25;
+    case 'vix1d_above_avg':    return regime.vix1dRelative === 'above';
+    case 'vix1d_at_or_below':  return regime.vix1dRelative === 'below' || regime.vix1dRelative === 'at';
+    case 'spx_above_sma':      return regime.spxVsSma === 'above';
+    case 'is_tuesday':         return etNow.getDay() === 2;
+    case 'time_after_10am':    return etMin >= 10 * 60;
+    case 'time_after_1030am':  return etMin >= 10 * 60 + 30;
+    case 'time_after_11am':    return etMin >= 11 * 60;
+    case 'time_after_1pm':     return etMin >= 13 * 60;
+    case 'time_11am_1pm':      return etMin >= 11 * 60 && etMin <= 13 * 60;
+    case 'time_3_55_3_58':     return etMin >= 15 * 60 + 55 && etMin <= 15 * 60 + 58;
+    case 'equal_premium_sides': {
+      if (!suggestion?.shortPutPremium || !suggestion?.shortCallPremium) return false;
+      return Math.abs(suggestion.shortPutPremium - suggestion.shortCallPremium) <= 0.30;
+    }
+    case 'schwartz_dollar_rule': {
+      const sp = suggestion?.shortPutPremium ?? 0;
+      const sc = suggestion?.shortCallPremium ?? 0;
+      return sp >= 0.75 && sp <= 1.40 && sc >= 0.75 && sc <= 1.40;
+    }
+    case 'min_credit_15pct':   return width > 0 && credit / width >= 0.15;
+    case 'tuesday_min_credit': return credit >= 1.80;
+    case 'rr_48pct':           return width > 0 && credit / (width - credit) >= 0.48;
+    default:                   return false;
+  }
+}
+
 // ─── Strategy Accordion Row ───────────────────────────────────────────────────
 
 function StrategyAccordionRow({
@@ -892,22 +964,34 @@ function StrategyAccordionRow({
   isOpen,
   onToggle,
   suggestion,
+  regime,
 }: {
   strategy: Strategy;
   index: number;
   isOpen: boolean;
   onToggle: () => void;
   suggestion?: StrategySuggestion | null;
+  regime: RegimeState;
 }) {
-  const [checked, setChecked] = useState<boolean[]>(() => strategy.checklist.map(() => false));
+  // Only manual items (no autoKey) need checkbox state
+  const manualIndices = strategy.checklist
+    .map((item, i) => (item.autoKey ? null : i))
+    .filter((i): i is number => i !== null);
+  const [manualChecked, setManualChecked] = useState<Record<number, boolean>>({});
   const [showLogger, setShowLogger] = useState(false);
 
-  const allChecked = checked.every(Boolean);
-  const checkedCount = checked.filter(Boolean).length;
-
-  function toggleItem(i: number) {
-    setChecked(c => c.map((v, j) => (j === i ? !v : v)));
+  function toggleManual(i: number) {
+    setManualChecked(prev => ({ ...prev, [i]: !prev[i] }));
   }
+
+  // Evaluate all conditions
+  const conditionResults = strategy.checklist.map(item =>
+    item.autoKey ? evalAutoCondition(item.autoKey, regime, suggestion ?? null) : null
+  );
+  const autoPass   = conditionResults.filter(r => r === true).length;
+  const autoFail   = conditionResults.filter(r => r === false).length;
+  const manualDone = manualIndices.filter(i => manualChecked[i]).length;
+  const allCleared = autoFail === 0 && manualDone === manualIndices.length;
 
   return (
     <div>
@@ -1015,28 +1099,42 @@ function StrategyAccordionRow({
                     <span>Type</span>
                     <span>Delta</span>
                     <span>IV</span>
-                    <span className="text-right">Est. $</span>
+                    <span className="text-right">Mid $</span>
                   </div>
 
-                  {/* Put spread legs */}
-                  {hasPut && (
-                    <>
-                      <LiveLegRow action="sell" strike={suggestion.shortPutStrike!} optionType="put"
-                        delta={suggestion.shortPutDelta} iv={suggestion.impliedVol} premium={suggestion.shortPutPremium} />
-                      <LiveLegRow action="buy"  strike={suggestion.longPutStrike!}  optionType="put"
-                        delta={suggestion.longPutDelta}  iv={suggestion.impliedVol} premium={suggestion.longPutPremium} />
-                    </>
-                  )}
+                  {/* PUT CREDIT SPREAD section */}
+                  {hasPut && (() => {
+                    const putCredit = Math.max(0, (suggestion.shortPutPremium ?? 0) - (suggestion.longPutPremium ?? 0));
+                    return (
+                      <div className="mb-1">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-slate-700/50">
+                          <span className="font-semibold">Put Credit Spread</span>
+                          <span className="text-green-400 font-mono">+${putCredit.toFixed(2)} credit</span>
+                        </div>
+                        <LiveLegRow action="sell" strike={suggestion.shortPutStrike!} optionType="put"
+                          delta={suggestion.shortPutDelta} iv={suggestion.impliedVol} premium={suggestion.shortPutPremium} />
+                        <LiveLegRow action="buy"  strike={suggestion.longPutStrike!}  optionType="put"
+                          delta={suggestion.longPutDelta}  iv={suggestion.impliedVol} premium={suggestion.longPutPremium} />
+                      </div>
+                    );
+                  })()}
 
-                  {/* Call spread legs (IC only) */}
-                  {hasCall && (
-                    <>
-                      <LiveLegRow action="sell" strike={suggestion.shortCallStrike!} optionType="call"
-                        delta={suggestion.shortCallDelta} iv={suggestion.impliedVol} premium={suggestion.shortCallPremium} />
-                      <LiveLegRow action="buy"  strike={suggestion.longCallStrike!}  optionType="call"
-                        delta={suggestion.longCallDelta}  iv={suggestion.impliedVol} premium={suggestion.longCallPremium} />
-                    </>
-                  )}
+                  {/* CALL CREDIT SPREAD section (IC only) */}
+                  {hasCall && (() => {
+                    const callCredit = Math.max(0, (suggestion.shortCallPremium ?? 0) - (suggestion.longCallPremium ?? 0));
+                    return (
+                      <div className={hasPut ? 'mt-2 pt-2 border-t border-gray-700/30' : ''}>
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-slate-700/50">
+                          <span className="font-semibold">Call Credit Spread</span>
+                          <span className="text-green-400 font-mono">+${callCredit.toFixed(2)} credit</span>
+                        </div>
+                        <LiveLegRow action="sell" strike={suggestion.shortCallStrike!} optionType="call"
+                          delta={suggestion.shortCallDelta} iv={suggestion.impliedVol} premium={suggestion.shortCallPremium} />
+                        <LiveLegRow action="buy"  strike={suggestion.longCallStrike!}  optionType="call"
+                          delta={suggestion.longCallDelta}  iv={suggestion.impliedVol} premium={suggestion.longCallPremium} />
+                      </div>
+                    );
+                  })()}
 
                   {/* Net summary */}
                   <div className="mt-2 pt-2 border-t border-gray-700/40 grid grid-cols-3 gap-2 text-xs">
@@ -1124,42 +1222,78 @@ function StrategyAccordionRow({
             </table>
           </div>
 
-          {/* [C] Entry Checklist */}
+          {/* [C] Entry Checklist — auto-evaluated */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <ClipboardList size={14} className="text-blue-400" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Checklist</h3>
               </div>
-              <span className="text-xs text-slate-500">{checkedCount}/{strategy.checklist.length} confirmed</span>
+              <span className="text-xs text-slate-500">
+                {autoPass + manualDone}/{strategy.checklist.length} confirmed
+                {autoFail > 0 && <span className="text-red-400 ml-1">· {autoFail} failed</span>}
+              </span>
             </div>
             <div className="space-y-2 mb-3">
-              {strategy.checklist.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => toggleItem(i)}
-                  className="flex items-start gap-2.5 w-full text-left group"
-                >
-                  {checked[i] ? (
-                    <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
-                  ) : (
-                    <Circle size={16} className="text-slate-600 shrink-0 mt-0.5 group-hover:text-slate-400" />
-                  )}
-                  <span className={`text-xs leading-relaxed ${checked[i] ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
-                    {item}
-                  </span>
-                </button>
-              ))}
+              {strategy.checklist.map((item, i) => {
+                const autoResult = conditionResults[i]; // null = manual, true = pass, false = fail
+                const isManual = autoResult === null;
+                const manualVal = manualChecked[i] ?? false;
+
+                return (
+                  <div key={i} className={`flex items-start gap-2.5 ${isManual ? 'cursor-pointer group' : ''}`}
+                    onClick={isManual ? () => toggleManual(i) : undefined}
+                  >
+                    {/* Status icon */}
+                    {!isManual && autoResult === true && (
+                      <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
+                    )}
+                    {!isManual && autoResult === false && (
+                      <span className="text-red-400 shrink-0 mt-0.5 text-sm font-bold leading-4">✗</span>
+                    )}
+                    {isManual && manualVal && (
+                      <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
+                    )}
+                    {isManual && !manualVal && (
+                      <Circle size={16} className="text-slate-600 shrink-0 mt-0.5 group-hover:text-slate-400" />
+                    )}
+
+                    {/* Label + auto badge */}
+                    <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                      <span className={`text-xs leading-relaxed ${
+                        !isManual && autoResult === true  ? 'text-green-400' :
+                        !isManual && autoResult === false ? 'text-red-400'   :
+                        isManual  && manualVal           ? 'text-slate-400 line-through' :
+                                                           'text-slate-300'
+                      }`}>
+                        {item.text}
+                      </span>
+                      {!isManual && (
+                        <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded shrink-0 mt-0.5 ${
+                          autoResult ? 'bg-green-900/60 text-green-400' : 'bg-red-900/60 text-red-400'
+                        }`}>
+                          {autoResult ? 'auto ✓' : 'auto ✗'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            {allChecked ? (
+            {allCleared ? (
               <div className="flex items-center gap-2 bg-green-950/50 border border-green-700 rounded-lg px-4 py-2.5 text-green-300 font-semibold text-sm">
                 <CheckCircle2 size={16} />
                 CLEARED TO TRADE
               </div>
+            ) : autoFail > 0 ? (
+              <div className="flex items-center gap-2 bg-red-950/30 border border-red-700/50 rounded-lg px-4 py-2.5 text-red-400 text-sm">
+                <AlertTriangle size={14} />
+                {autoFail} condition(s) not met — regime does not support this strategy now
+              </div>
             ) : (
               <div className="flex items-center gap-2 bg-yellow-950/30 border border-yellow-700/50 rounded-lg px-4 py-2.5 text-yellow-400 text-sm">
                 <AlertTriangle size={14} />
-                {strategy.checklist.length - checkedCount} condition(s) not confirmed — verify before trading
+                {manualIndices.length - manualDone} manual check(s) remaining — verify before trading
               </div>
             )}
           </div>
@@ -1210,7 +1344,7 @@ function StrategyAccordionRow({
           ) : (
             <TradeLoggerForm
               strategyId={strategy.id}
-              checkedItems={checkedCount}
+              checkedItems={autoPass + manualDone}
               totalItems={strategy.checklist.length}
               onClose={() => setShowLogger(false)}
               prefill={suggestion}
@@ -1322,6 +1456,7 @@ export function ZeroDTELibrary() {
             isOpen={openId === strategy.id}
             onToggle={() => setOpenId(openId === strategy.id ? null : strategy.id)}
             suggestion={suggestions.get(strategy.id) ?? null}
+            regime={regime}
           />
         ))}
       </div>
