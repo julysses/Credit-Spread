@@ -51,13 +51,44 @@ export type StrategySuggestion = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Live option chain fetchers
+// Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Returns a map of "PUT_5750" or "CALL_5750" → mid-price
-type ChainMap = Map<string, number>;
+type ChainMap = Map<string, number>; // "PUT_5750" | "CALL_5750" → mid-price
 
-/** MarketData.app — real bid/ask, today's 0DTE expiry */
+function round5(n: number): number { return Math.round(n / 5) * 5; }
+
+/** Only fetch live chain during regular trading hours (9:30–4:05 PM ET, weekdays) */
+function isMarketHours(): boolean {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  if (day === 0 || day === 6) return false;
+  const t = et.getHours() * 100 + et.getMinutes();
+  return t >= 930 && t < 1605;
+}
+
+/** Today's ET date in YYYY-MM-DD format */
+function todayET(): string {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+    .toLocaleDateString('en-CA');
+}
+
+/** Look up mid from chain; tolerates ±5 pt rounding artefacts */
+function getLive(chain: ChainMap, type: 'PUT' | 'CALL', strike: number): number | null {
+  const exact = chain.get(`${type}_${strike}`);
+  if (exact != null && exact > 0) return exact;
+  for (const d of [5, -5, 10, -10]) {
+    const v = chain.get(`${type}_${strike + d}`);
+    if (v != null && v > 0) return v;
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Option chain fetchers (tried in priority order)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 1. MarketData.app — real bid/ask, most reliable if API key configured */
 async function fetchMDChain(expiry: string): Promise<ChainMap> {
   const key = process.env.MARKETDATA_API_KEY;
   if (!key) return new Map();
@@ -77,58 +108,142 @@ async function fetchMDChain(expiry: string): Promise<ChainMap> {
       const ask: number = d.ask?.[i] ?? 0;
       const last: number = d.last?.[i] ?? 0;
       const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : last;
-      if (mid > 0 && (side === 'PUT' || side === 'CALL')) {
-        map.set(`${side}_${strike}`, mid);
+      if (mid > 0 && (side === 'PUT' || side === 'CALL')) map.set(`${side}_${strike}`, mid);
+    }
+    console.log(`[chain] MarketData.app: ${map.size} entries`);
+    return map;
+  } catch (err) {
+    console.warn('[chain] MarketData.app failed:', (err as Error).message);
+    return new Map();
+  }
+}
+
+/**
+ * 2. CBOE delayed quotes — free, no auth, ~15 min delay.
+ * Tries both /SPX.json and /SPXW.json (0DTE can be either depending on day).
+ * Symbol format: SPXW240409C05800000 → side=C, strike=5800.000
+ */
+async function fetchCBOEChain(expiryDate: string): Promise<ChainMap> {
+  // CBOE option symbol embeds date as YYMMDD
+  const yymmdd = expiryDate.replace(/-/g, '').slice(2);
+  const map: ChainMap = new Map();
+  try {
+    const [spxRes, spxwRes] = await Promise.allSettled([
+      axios.get('https://cdn.cboe.com/api/global/delayed_quotes/options/SPX.json', {
+        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        timeout: 8000,
+      }),
+      axios.get('https://cdn.cboe.com/api/global/delayed_quotes/options/SPXW.json', {
+        headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        timeout: 8000,
+      }),
+    ]);
+
+    for (const result of [spxRes, spxwRes]) {
+      if (result.status !== 'fulfilled') continue;
+      const opts: unknown[] = (result.value.data as { data?: { options?: unknown[] } })?.data?.options ?? [];
+      for (const raw of opts) {
+        const opt = raw as Record<string, unknown>;
+        const sym = typeof opt.option === 'string' ? opt.option : '';
+        if (!sym.includes(yymmdd)) continue; // skip other expiries
+
+        // Symbol: SPXW240409C05800000 — last char before 8-digit block is C or P
+        const m = sym.match(/([CP])(\d{8})$/);
+        if (!m) continue;
+        const side = m[1] === 'C' ? 'CALL' : 'PUT';
+        const strike = parseInt(m[2]) / 1000;
+        if (strike < 1000 || strike > 20000) continue;
+
+        const bid = typeof opt.bid === 'number' ? opt.bid : 0;
+        const ask = typeof opt.ask === 'number' ? opt.ask : 0;
+        const last = typeof opt.last === 'number' ? opt.last : 0;
+        const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : last;
+        if (mid > 0) {
+          const k = `${side}_${strike}`;
+          if (!map.has(k)) map.set(k, mid); // SPX takes precedence over SPXW
+        }
       }
     }
-    console.log(`MarketData option chain loaded: ${map.size} entries for ${expiry}`);
+    if (map.size > 0) console.log(`[chain] CBOE: ${map.size} entries for ${expiryDate}`);
     return map;
   } catch (err) {
-    console.warn('MarketData chain fetch failed:', (err as Error).message);
-    return new Map();
+    console.warn('[chain] CBOE fetch failed:', (err as Error).message);
+    return map;
   }
 }
 
-/** Yahoo Finance — free, no auth, returns today's nearest expiry chain */
-async function fetchYahooChain(): Promise<ChainMap> {
+/**
+ * 3. Yahoo Finance v7 — free, requests today's date explicitly.
+ * Without a date param Yahoo returns the next standard Friday, not 0DTE.
+ */
+async function fetchYahooChain(expiryDate: string): Promise<ChainMap> {
   try {
+    // Convert YYYY-MM-DD to Unix timestamp for 4 PM ET (approx 21:00 UTC)
+    const [yr, mo, dy] = expiryDate.split('-').map(Number);
+    const expiryUnix = Math.floor(Date.UTC(yr, mo - 1, dy, 21) / 1000);
+
     const resp = await axios.get(
-      'https://query1.finance.yahoo.com/v8/finance/options/%5ESPX',
-      { headers: YAHOO_HEADERS, timeout: 10000 }
+      'https://query1.finance.yahoo.com/v7/finance/options/%5ESPX',
+      { params: { date: expiryUnix }, headers: YAHOO_HEADERS, timeout: 10000 }
     );
-    const options = resp.data?.optionChain?.result?.[0]?.options?.[0];
-    if (!options) return new Map();
+
+    const chain = resp.data?.optionChain?.result?.[0];
+    if (!chain) return new Map();
+
+    // Find the option set for today's expiry; fall back to first set
+    const opts = (chain.options as { expirationDate?: number; puts?: unknown[]; calls?: unknown[] }[])
+      ?.find(o => {
+        if (!o.expirationDate) return false;
+        const d = new Date(o.expirationDate * 1000)
+          .toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        return d === expiryDate;
+      }) ?? chain.options?.[0];
+
+    if (!opts) return new Map();
 
     const map: ChainMap = new Map();
-    for (const opt of options.puts ?? []) {
-      if (!opt.strike) continue;
-      const mid = opt.bid > 0 && opt.ask > 0
-        ? (opt.bid + opt.ask) / 2
-        : (opt.lastPrice ?? 0);
-      if (mid > 0) map.set(`PUT_${opt.strike}`, mid);
-    }
-    for (const opt of options.calls ?? []) {
-      if (!opt.strike) continue;
-      const mid = opt.bid > 0 && opt.ask > 0
-        ? (opt.bid + opt.ask) / 2
-        : (opt.lastPrice ?? 0);
-      if (mid > 0) map.set(`CALL_${opt.strike}`, mid);
-    }
-    console.log(`Yahoo option chain loaded: ${map.size} entries`);
+    const parseSide = (arr: unknown[], side: 'PUT' | 'CALL') => {
+      for (const raw of arr ?? []) {
+        const o = raw as Record<string, number>;
+        if (!o.strike) continue;
+        const mid = o.bid > 0 && o.ask > 0 ? (o.bid + o.ask) / 2 : (o.lastPrice ?? 0);
+        if (mid > 0) map.set(`${side}_${o.strike}`, mid);
+      }
+    };
+    parseSide(opts.puts ?? [], 'PUT');
+    parseSide(opts.calls ?? [], 'CALL');
+
+    if (map.size > 0) console.log(`[chain] Yahoo: ${map.size} entries for ${expiryDate}`);
     return map;
   } catch (err) {
-    console.warn('Yahoo option chain fetch failed:', (err as Error).message);
+    console.warn('[chain] Yahoo fetch failed:', (err as Error).message);
     return new Map();
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+/** Tries all sources in priority order; returns best available chain + source name */
+async function fetchBestChain(expiry: string): Promise<{ chain: ChainMap; source: string }> {
+  if (!isMarketHours()) {
+    console.log('[chain] Market closed — using BS pricing');
+    return { chain: new Map(), source: 'bs' };
+  }
 
-function round5(n: number): number {
-  return Math.round(n / 5) * 5;
+  const md = await fetchMDChain(expiry);
+  if (md.size > 0) return { chain: md, source: 'marketdata' };
+
+  const cboe = await fetchCBOEChain(expiry);
+  if (cboe.size > 0) return { chain: cboe, source: 'cboe' };
+
+  const yahoo = await fetchYahooChain(expiry);
+  if (yahoo.size > 0) return { chain: yahoo, source: 'yahoo' };
+
+  console.warn('[chain] All sources failed — falling back to BS model');
+  return { chain: new Map(), source: 'bs' };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pricing helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 function absDelta(spx: number, K: number, T: number, sigma: number, type: 'put' | 'call'): number {
   if (T <= 0) return 0;
@@ -138,19 +253,6 @@ function absDelta(spx: number, K: number, T: number, sigma: number, type: 'put' 
 function bsPrice(spx: number, K: number, T: number, sigma: number, type: 'put' | 'call'): number {
   if (T <= 0) return Math.max(type === 'put' ? K - spx : spx - K, 0);
   return Math.max(blackScholes({ S: spx, K, T, r: 0, sigma, optionType: type }).price, 0);
-}
-
-/** Look up mid-price from live chain; nearest-5 strike lookup with ±10 tolerance */
-function getLive(chain: ChainMap, type: 'PUT' | 'CALL', strike: number): number | null {
-  // Exact match first
-  const exact = chain.get(`${type}_${strike}`);
-  if (exact != null && exact > 0) return exact;
-  // Try ±5 (rounding artefacts)
-  for (const delta of [5, -5, 10, -10]) {
-    const v = chain.get(`${type}_${strike + delta}`);
-    if (v != null && v > 0) return v;
-  }
-  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -165,7 +267,6 @@ function buildIC(
   const longPut  = shortPut  - width;
   const longCall = shortCall + width;
 
-  // Premiums: prefer live mid-price (real bid/ask), fall back to BS
   const spPrem = getLive(chain, 'PUT',  shortPut)  ?? bsPrice(spx, shortPut,  T, sigma, 'put');
   const lpPrem = getLive(chain, 'PUT',  longPut)   ?? bsPrice(spx, longPut,   T, sigma, 'put');
   const scPrem = getLive(chain, 'CALL', shortCall) ?? bsPrice(spx, shortCall, T, sigma, 'call');
@@ -255,28 +356,24 @@ function buildPCS(
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const spx = parseFloat(searchParams.get('spx') ?? '5800');
-  const vix = parseFloat(searchParams.get('vix') ?? '18');
+  const spx        = parseFloat(searchParams.get('spx')        ?? '5800');
+  const vix        = parseFloat(searchParams.get('vix')        ?? '18');
+  const vix1d      = parseFloat(searchParams.get('vix1d')      ?? '0');
   const minutesLeft = parseFloat(searchParams.get('minutesLeft') ?? '240');
 
   if (!spx || !vix || spx < 1000 || vix < 1) {
     return NextResponse.json({ success: false, error: 'Invalid spx or vix' }, { status: 400 });
   }
 
-  const sigma = vix / 100;
-  const T = Math.max(minutesLeft, 1) / MINS_PER_YEAR;
+  // VIX1D is the better vol estimate for same-day (0DTE) options.
+  // VIX (30-day) systematically over-prices near-term vol; VIX1D is calibrated to daily reality.
+  const sigma = Math.max(0.05, (vix1d > 2 ? vix1d : vix) / 100);
+
+  const T      = Math.max(minutesLeft, 1) / MINS_PER_YEAR;
   const T_late = 5 / MINS_PER_YEAR;
 
-  // Today's 0DTE expiry (ET date)
-  const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const todayExpiry = etNow.toLocaleDateString('en-CA'); // YYYY-MM-DD
-
-  // Fetch live option chain: MarketData.app first, Yahoo Finance fallback
-  let chain: ChainMap = await fetchMDChain(todayExpiry);
-  if (chain.size === 0) {
-    chain = await fetchYahooChain();
-  }
-  const hasLiveChain = chain.size > 0;
+  const expiry = todayET();
+  const { chain, source: chainSource } = await fetchBestChain(expiry);
 
   const suggestions: StrategySuggestion[] = [];
 
@@ -330,7 +427,14 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     success: true,
     data: suggestions,
-    spx, vix, minutesLeft, T,
-    priceSource: hasLiveChain ? (process.env.MARKETDATA_API_KEY ? 'marketdata' : 'yahoo') : 'bs',
+    meta: {
+      spx, vix, vix1d,
+      sigmaUsed: parseFloat((sigma * 100).toFixed(2)),
+      sigmaSource: vix1d > 2 ? 'VIX1D' : 'VIX',
+      chainSource,
+      chainEntries: chain.size,
+      expiry,
+      minutesLeft,
+    },
   });
 }
