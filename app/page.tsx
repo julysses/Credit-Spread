@@ -8,11 +8,12 @@ import { MarketRegimeCard } from '@/components/dashboard/MarketRegimeCard';
 import { TradeJournal } from '@/components/dashboard/TradeJournal';
 import { StrategiesHub } from '@/components/dashboard/StrategiesHub';
 import { SignalStackEngine } from '@/components/dashboard/SignalStackEngine';
+import { PreMarketDashboard } from '@/components/dashboard/PreMarketDashboard';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { AnalyticsChart } from '@/components/charts/AnalyticsChart';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-type Tab = 'dashboard' | 'strategies' | 'analytics' | 'journal' | 'simulator' | 'signal-stack';
+type Tab = 'dashboard' | 'strategies' | 'analytics' | 'journal' | 'simulator' | 'signal-stack' | 'pre-market';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface DashboardState {
@@ -166,6 +167,7 @@ export default function DashboardPage() {
                 { id: 'journal', label: 'Trade Journal' },
                 { id: 'simulator', label: 'Monte Carlo' },
                 { id: 'signal-stack', label: '🔬 Signal Stack' },
+                { id: 'pre-market', label: '📊 Pre-Market' },
               ] as { id: Tab; label: string }[]
             ).map(t => (
               <button
@@ -300,6 +302,10 @@ export default function DashboardPage() {
 
         {tab === 'signal-stack' && (
           <SignalStackEngine />
+        )}
+
+        {tab === 'pre-market' && (
+          <PreMarketDashboard />
         )}
 
         {tab === 'analytics' && state.analytics && (

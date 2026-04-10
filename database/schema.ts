@@ -345,6 +345,82 @@ export const zeroDteTrades = pgTable('zero_dte_trades', {
 }));
 
 // ─────────────────────────────────────────────
+// Institutional Pre-Trade Signals (7 Edges)
+// ─────────────────────────────────────────────
+export const dailySignals = pgTable('daily_signals', {
+  id: serial('id').primaryKey(),
+  signalDate: varchar('signal_date', { length: 20 }).notNull().unique(),
+  // Edge 07 — SPX vs 200-SMA
+  spxClose: real('spx_close'),
+  spxVs200sma: real('spx_vs_200sma'),           // % above/below
+  // Edge 02 — VIX Term Structure
+  vixClose: real('vix_close'),
+  vvixClose: real('vvix_close'),
+  vix9d: real('vix_9d'),
+  vix30: real('vix_30'),
+  vixTermStructure: varchar('vix_term_structure', { length: 30 }), // steep_contango|mild_contango|flat|backwardation
+  // Edge 01 — GEX
+  gexNet: real('gex_net'),
+  gammaFlipLevel: real('gamma_flip_level'),
+  callWall: real('call_wall'),
+  putWall: real('put_wall'),
+  // Edge 04 — Dark Pool Flow
+  darkPoolBias: varchar('dark_pool_bias', { length: 20 }),        // bullish|bearish|neutral
+  darkPoolCallPct: real('dark_pool_call_pct'),
+  // Edge 06 — Breadth
+  adRatio: real('ad_ratio'),
+  pctAbove200sma: real('pct_above_200sma'),
+  // Edge 05 — Catalyst Risk
+  catalystRisk: boolean('catalyst_risk').default(false),
+  catalystDetail: text('catalyst_detail'),
+  // Tier score (1–5)
+  tierScore: integer('tier_score'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => ({
+  dailySignalsDateIdx: index('daily_signals_date_idx').on(t.signalDate),
+}));
+
+// ─────────────────────────────────────────────
+// Session Trade Plans (Claude-generated)
+// ─────────────────────────────────────────────
+export const sessionPlans = pgTable('session_plans', {
+  id: serial('id').primaryKey(),
+  planDate: varchar('plan_date', { length: 20 }).notNull(),
+  signalId: integer('signal_id').references(() => dailySignals.id),
+  regimeTier: integer('regime_tier'),
+  strategy: text('strategy'),
+  strikes: text('strikes'),
+  dte: integer('dte'),
+  positionSizePct: real('position_size_pct'),
+  entryConditions: text('entry_conditions'),
+  exitRules: text('exit_rules'),
+  claudeRawOutput: text('claude_raw_output'),
+  appliedRules: jsonb('applied_rules'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => ({
+  sessionPlansDateIdx: index('session_plans_date_idx').on(t.planDate),
+}));
+
+// ─────────────────────────────────────────────
+// Overnight Futures Checks (Checkpoint 6)
+// ─────────────────────────────────────────────
+export const overnightChecks = pgTable('overnight_checks', {
+  id: serial('id').primaryKey(),
+  checkDate: varchar('check_date', { length: 20 }).notNull(),
+  esOvernightHigh: real('es_overnight_high'),
+  esOvernightLow: real('es_overnight_low'),
+  esCurrentPrice: real('es_current_price'),
+  nqOvernightHigh: real('nq_overnight_high'),
+  nqOvernightLow: real('nq_overnight_low'),
+  gapVsPriorClose: real('gap_vs_prior_close'),
+  gapPct: real('gap_pct'),
+  overnightType: varchar('overnight_type', { length: 30 }), // trending_up|trending_down|choppy
+  createdAt: timestamp('created_at').defaultNow(),
+}, (t) => ({
+  overnightChecksDateIdx: index('overnight_checks_date_idx').on(t.checkDate),
+}));
+
+// ─────────────────────────────────────────────
 // Morning Briefings
 // ─────────────────────────────────────────────
 export const morningBriefings = pgTable('morning_briefings', {
