@@ -16,12 +16,14 @@ import {
   type TradePlan,
 } from '@/lib/models/stock-feature-engine';
 import { classifyIntradayRegime, type IntradayRegimeResult } from '@/lib/models/intraday-regime-engine';
+import { YAHOO_ONLY_SYMBOLS, YAHOO_SYMBOL_MAP } from '@/lib/constants/stock-universe';
 
 export const dynamic = 'force-dynamic';
 
 // ─── Universe ─────────────────────────────────────────────────────────────────
 
 const ETF_UNIVERSE = [
+  'SPX',
   'SPY','QQQ','IWM','DIA','TLT','GLD','SLV','XLF','XLK','XLE',
   'XLI','XLP','XLY','XLV','XLU','XLB','XLC','SMH','SOXX','ARKK',
   'TQQQ','SQQQ','UPRO','SPXU','SDS','UVXY','SVXY','KRE','EEM','FXI',
@@ -33,8 +35,11 @@ const STOCK_UNIVERSE = [
   'COIN','CRM','ADBE','ORCL','MU','QCOM','NOW','PANW','UBER','SHOP',
 ];
 
+// Symbols that Alpaca cannot serve (indices) — see lib/constants/stock-universe
+
 // Approximate avg daily volumes for RVOL baseline (shares, not dollar volume)
 const AVG_VOLUMES: Record<string, number> = {
+  SPX: 0,  // index — no true volume; RVOL will default to 1.0
   SPY: 80_000_000, QQQ: 40_000_000, IWM: 30_000_000, DIA: 5_000_000,
   TLT: 15_000_000, GLD: 8_000_000, SLV: 10_000_000, XLF: 25_000_000,
   XLK: 10_000_000, XLE: 12_000_000, XLI: 5_000_000, XLP: 5_000_000,
@@ -63,8 +68,9 @@ const YAHOO_HEADERS = {
 };
 
 async function fetchIntradayBarsYahoo(symbol: string): Promise<OHLCVBar[] | null> {
+  const yahooSym = YAHOO_SYMBOL_MAP[symbol] ?? symbol;
   try {
-    const resp = await axios.get(`${YAHOO_CHART}/${encodeURIComponent(symbol)}`, {
+    const resp = await axios.get(`${YAHOO_CHART}/${encodeURIComponent(yahooSym)}`, {
       params: { range: '1d', interval: '5m', includePrePost: 'false' },
       headers: YAHOO_HEADERS,
       timeout: 8000,
@@ -87,9 +93,9 @@ async function fetchIntradayBarsYahoo(symbol: string): Promise<OHLCVBar[] | null
   }
 }
 
-/** Alpaca primary → Yahoo Finance fallback */
+/** Alpaca primary → Yahoo Finance fallback (indices always via Yahoo) */
 async function fetchIntradayBars(symbol: string): Promise<OHLCVBar[] | null> {
-  if (alpacaConfigured()) {
+  if (!YAHOO_ONLY_SYMBOLS.has(symbol) && alpacaConfigured()) {
     const bars = await fetchAlpacaIntraday(symbol);
     if (bars && bars.length >= 3) return bars;
   }

@@ -3,16 +3,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, TrendingDown, Minus, AlertTriangle, BarChart3,
-  RefreshCw, ChevronDown, ChevronRight,
+  RefreshCw, ChevronDown, ChevronRight, Moon,
 } from 'lucide-react';
 import { StockScannerTable } from './StockScannerTable';
 import { StockTradePlanCard } from './StockTradePlanCard';
+import { SwingWatchlistPanel } from './SwingWatchlistPanel';
 import type { ScanCandidate } from '@/app/api/stocks/scan/route';
 import type { IntradayRegimeResult, IntradayRegime } from '@/lib/models/intraday-regime-engine';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ETF_LIST = [
+  'SPX',
   'SPY','QQQ','IWM','DIA','TLT','GLD','SLV','XLF','XLK','XLE',
   'XLI','XLP','XLY','XLV','XLU','XLB','XLC','SMH','SOXX','ARKK',
   'TQQQ','SQQQ','UPRO','SPXU','SDS','UVXY','SVXY','KRE','EEM','FXI',
@@ -52,6 +54,7 @@ function mergeCandidates(existing: ScanCandidate[], incoming: ScanCandidate[]): 
 }
 
 export function StocksDaytradeTab() {
+  const [activeSubTab, setActiveSubTab] = useState<'daytrade' | 'swing'>('daytrade');
   const [regime, setRegime] = useState<IntradayRegimeResult | null>(null);
   const [regimeLoading, setRegimeLoading] = useState(true);
   const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
@@ -116,18 +119,54 @@ export function StocksDaytradeTab() {
 
   return (
     <div className="space-y-5">
-      {/* ── Header ────────────────────────────────────────────────────────── */}
+      {/* ── Header + Sub-nav ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-base font-bold text-white flex items-center gap-2">
             <BarChart3 size={17} className="text-blue-400" />
-            Day Trade Scanner
+            Stocks
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            60-symbol universe · 7 strategies · regime-filtered signals
-            {lastScanned && <span className="ml-2 text-gray-600">Last scan: {lastScanned}</span>}
+            61-symbol universe · Alpaca live data
           </p>
         </div>
+        {/* Sub-navigation */}
+        <div className="flex rounded-lg border border-gray-700 overflow-hidden text-xs font-semibold">
+          <button
+            onClick={() => setActiveSubTab('daytrade')}
+            className={`px-4 py-2 flex items-center gap-1.5 transition-colors ${
+              activeSubTab === 'daytrade'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-900 text-gray-400 hover:text-white'
+            }`}
+          >
+            <BarChart3 size={12} /> Day Trade
+          </button>
+          <button
+            onClick={() => setActiveSubTab('swing')}
+            className={`px-4 py-2 flex items-center gap-1.5 border-l border-gray-700 transition-colors ${
+              activeSubTab === 'swing'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-900 text-gray-400 hover:text-white'
+            }`}
+          >
+            <Moon size={12} /> Swing Watchlist
+          </button>
+        </div>
+      </div>
+
+      {/* ── Swing Watchlist Sub-tab ───────────────────────────────────────── */}
+      {activeSubTab === 'swing' && <SwingWatchlistPanel />}
+
+      {/* ── Day Trade content ─────────────────────────────────────────────── */}
+      {activeSubTab === 'daytrade' && (<>
+
+      {/* ── Day Trade Header controls ──────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-gray-500">
+          61-symbol universe · 7 strategies · regime-filtered signals
+          {lastScanned && <span className="ml-2 text-gray-600">Last scan: {lastScanned}</span>}
+        </p>
         <button
           onClick={runScan}
           disabled={scanLoading}
@@ -244,15 +283,19 @@ export function StocksDaytradeTab() {
         >
           {showUniverse ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
           <span className="text-xs font-semibold text-gray-400">Universe Reference</span>
-          <span className="ml-1 text-xs text-gray-600">30 ETFs · 30 Stocks</span>
+          <span className="ml-1 text-xs text-gray-600">31 ETFs · 30 Stocks</span>
         </button>
         {showUniverse && (
           <div className="p-4 border-t border-gray-800 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-950/40">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-purple-400 font-bold mb-2">ETFs</p>
+              <p className="text-[10px] uppercase tracking-widest text-purple-400 font-bold mb-2">ETFs + Indices</p>
               <div className="flex flex-wrap gap-1.5">
                 {ETF_LIST.map(s => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-600/20 font-mono">
+                  <span key={s} className={`text-xs px-2 py-0.5 rounded border font-mono ${
+                    s === 'SPX'
+                      ? 'bg-yellow-500/10 text-yellow-300 border-yellow-600/20'
+                      : 'bg-purple-500/10 text-purple-300 border-purple-600/20'
+                  }`}>
                     {s}
                   </span>
                 ))}
@@ -271,6 +314,8 @@ export function StocksDaytradeTab() {
           </div>
         )}
       </div>
+
+      </>)}
     </div>
   );
 }
