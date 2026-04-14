@@ -6,13 +6,14 @@ import { MorningBrief } from '@/components/dashboard/MorningBrief';
 import { TradeCard } from '@/components/dashboard/TradeCard';
 import { MarketRegimeCard } from '@/components/dashboard/MarketRegimeCard';
 import { TradeJournal } from '@/components/dashboard/TradeJournal';
-import { StrategiesHub } from '@/components/dashboard/StrategiesHub';
 import { SignalStackEngine } from '@/components/dashboard/SignalStackEngine';
+import { OptionsTab } from '@/components/dashboard/OptionsTab';
+import { StocksDaytradeTab } from '@/components/dashboard/StocksDaytradeTab';
 import { MonteCarloChart } from '@/components/charts/MonteCarloChart';
 import { AnalyticsChart } from '@/components/charts/AnalyticsChart';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-type Tab = 'dashboard' | 'strategies' | 'analytics' | 'journal' | 'simulator' | 'signal-stack';
+type Tab = 'dashboard' | 'options' | 'stocks' | 'analytics' | 'journal' | 'simulator' | 'signal-stack';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface DashboardState {
@@ -161,7 +162,8 @@ export default function DashboardPage() {
             {(
               [
                 { id: 'dashboard', label: 'Dashboard' },
-                { id: 'strategies', label: '⚡ Strategies' },
+                { id: 'options', label: '⚡ Options' },
+                { id: 'stocks', label: '📈 Stocks' },
                 { id: 'analytics', label: 'Analytics' },
                 { id: 'journal', label: 'Trade Journal' },
                 { id: 'simulator', label: 'Monte Carlo' },
@@ -294,8 +296,12 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {tab === 'strategies' && (
-          <StrategiesHub spxPrice={conditions?.spxPrice} vix={conditions?.vix} />
+        {tab === 'options' && (
+          <OptionsTab spxPrice={conditions?.spxPrice} vix={conditions?.vix} />
+        )}
+
+        {tab === 'stocks' && (
+          <StocksDaytradeTab />
         )}
 
         {tab === 'signal-stack' && (
