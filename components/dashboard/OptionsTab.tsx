@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronDown, ChevronRight, Zap, TrendingUp, BookOpen, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Zap, TrendingUp, BookOpen, BarChart3, ClipboardList, RefreshCw } from 'lucide-react';
 import { RegimeBanner } from './RegimeBanner';
 import { OptionsRegimeMatrix } from './OptionsRegimeMatrix';
+import { OptionsTradeCard } from './OptionsTradeCard';
 import { ZeroDTELibrary } from './ZeroDTELibrary';
 import { ZeroDTEPerformance } from './ZeroDTEPerformance';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import type {
   OptionsStrategyId,
   StructureDecision,
 } from '@/lib/models/options-strategy-selector';
+import type { OptionsTradePlan } from '@/app/api/options/trade-plans/route';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -32,6 +34,16 @@ interface StrategiesData {
   topSwingRecommendation: OptionsStrategy | null;
   regimeRationale: string;
   structureMatrix: StructureDecision[];
+  fetchedAt: number;
+}
+
+interface TradePlansData {
+  plans: OptionsTradePlan[];
+  regime: string;
+  compositeScore: number;
+  spx: number;
+  vix: number;
+  ivr: number;
   fetchedAt: number;
 }
 
@@ -121,7 +133,9 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
 
 export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
   const [data, setData] = useState<StrategiesData | null>(null);
+  const [tradePlans, setTradePlans] = useState<TradePlansData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [plansLoading, setPlansLoading] = useState(true);
   const [showMatrix, setShowMatrix] = useState(false);
   const [showZeroDTE, setShowZeroDTE] = useState(false);
   const [showPerf, setShowPerf] = useState(false);
@@ -138,7 +152,22 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const fetchTradePlans = useCallback(async () => {
+    setPlansLoading(true);
+    try {
+      const res = await fetch('/api/options/trade-plans').then(r => r.json());
+      if (res.success) setTradePlans(res.data);
+    } catch {
+      // silently fail
+    } finally {
+      setPlansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    fetchTradePlans();
+  }, [fetchData, fetchTradePlans]);
 
   const dayTradeActive = data?.activeStrategies.filter(s => s.category === 'options_day_trade') ?? [];
   const swingActive = data?.activeStrategies.filter(s => s.category === 'options_swing') ?? [];
@@ -155,6 +184,47 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
           {data.regimeRationale}
         </div>
       )}
+
+      {/* ── Live Trade Plans ─────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <ClipboardList size={16} className="text-emerald-400" />
+            <h2 className="text-sm font-bold text-white">Live Trade Plans</h2>
+            {tradePlans && (
+              <span className="text-xs font-mono text-gray-500">
+                SPX {tradePlans.spx.toFixed(0)} · VIX {tradePlans.vix.toFixed(1)} · IVR ≈{tradePlans.ivr}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={fetchTradePlans}
+            disabled={plansLoading}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={11} className={plansLoading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+
+        {plansLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-16 bg-gray-800/40 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : tradePlans && tradePlans.plans.length > 0 ? (
+          <div className="space-y-2">
+            {tradePlans.plans.map(plan => (
+              <OptionsTradeCard key={plan.strategyId} plan={plan} />
+            ))}
+          </div>
+        ) : (
+          <div className="border border-gray-800 rounded-xl p-4 text-center text-gray-500 text-sm">
+            No trade plans available. Market may be closed or data unavailable.
+          </div>
+        )}
+      </div>
 
       {/* ── Active Day Trade Strategies ──────────────────────────────────────── */}
       <div>
