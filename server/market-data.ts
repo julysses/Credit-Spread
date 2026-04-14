@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import { fetchAlpacaSnapshots, snapshotToQuote, alpacaConfigured } from './alpaca';
 
 export interface MarketQuote {
   symbol: string;
@@ -325,28 +326,50 @@ export function getNextExpiry(daysOut: number = 7): string {
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const expiry = getNextExpiry(7);
 
-  // Fetch MarketData.app (indices + stocks) and option chain in parallel
-  const [spxRaw, vixRaw, spyRaw, optionChain] = await Promise.all([
+  // Fetch MarketData.app (indices + options chain) and Alpaca SPY snapshot in parallel
+  const [spxRaw, vixRaw, spyRaw, optionChain, alpacaSnaps] = await Promise.all([
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
     fetchMDStockQuote('SPY'),
     fetchMDOptionChain('SPX', expiry),
+    alpacaConfigured() ? fetchAlpacaSnapshots(['SPY']) : Promise.resolve(new Map()),
   ]);
+
+  // Alpaca SPY — most reliable real-time source for stock quotes
+  const alpacaSpy = alpacaSnaps.get('SPY');
+  const alpacaSpyQuote = alpacaSpy ? snapshotToQuote(alpacaSpy) : null;
 
   // Determine which symbols need a Yahoo Finance fallback
   const needsYahoo: ('SPX' | 'VIX' | 'SPY')[] = [];
   if (!spxRaw || spxRaw.price === 0) needsYahoo.push('SPX');
   if (!vixRaw || vixRaw.price === 0) needsYahoo.push('VIX');
-  if (!spyRaw || spyRaw.price === 0) needsYahoo.push('SPY');
+  // SPY: skip Yahoo if Alpaca already has it
+  if (!alpacaSpyQuote && (!spyRaw || spyRaw.price === 0)) needsYahoo.push('SPY');
 
   // Fallback: Yahoo Finance (free, no auth, real-time)
   const yahooData = needsYahoo.length > 0
     ? await fetchYahooQuotes(needsYahoo)
     : new Map<string, MarketQuote>();
 
-  // Fallback chain for SPY: MarketData → Yahoo → Alpha Vantage
-  let spyData = spyRaw && spyRaw.price > 0 ? spyRaw : yahooData.get('SPY') ?? null;
-  if (!spyData || spyData.price === 0) {
+  // Fallback chain for SPY: Alpaca → MarketData → Yahoo → Alpha Vantage
+  let spyData: MarketQuote | null = null;
+  if (alpacaSpyQuote && alpacaSpyQuote.price > 0) {
+    spyData = {
+      symbol: 'SPY',
+      price: alpacaSpyQuote.price,
+      change: alpacaSpyQuote.change,
+      changePct: alpacaSpyQuote.changePct,
+      high: alpacaSpyQuote.high,
+      low: alpacaSpyQuote.low,
+      open: alpacaSpyQuote.open,
+      volume: alpacaSpyQuote.volume,
+      timestamp: alpacaSpyQuote.timestamp,
+    };
+  } else if (spyRaw && spyRaw.price > 0) {
+    spyData = spyRaw;
+  } else if (yahooData.get('SPY')) {
+    spyData = yahooData.get('SPY') ?? null;
+  } else {
     spyData = await fetchAlphaVantageQuote('SPY');
   }
   const spyPrice = spyData?.price ?? 0;
@@ -410,7 +433,8 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     timestamp: Date.now(),
   };
 
-  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSource ? (spxRaw?.price ? 'MD' : 'Yahoo') : 'derived'} VIX=${vixSource ? (vixRaw?.price ? 'MD' : 'Yahoo') : 'fallback'}`);
+  const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MD' : yahooData.get('SPY') ? 'Yahoo' : 'AV';
+  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSource ? (spxRaw?.price ? 'MD' : 'Yahoo') : 'derived'} VIX=${vixSource ? (vixRaw?.price ? 'MD' : 'Yahoo') : 'fallback'} SPY=${spySource}`);
 
   return {
     spx: spxQuote,

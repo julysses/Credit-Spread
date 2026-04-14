@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
 import {
+  fetchAlpacaSnapshots,
+  fetchAlpacaIntraday,
+  snapshotToQuote,
+  alpacaConfigured,
+} from '@/server/alpaca';
+import {
   computeSymbolFeatures,
   scoreAllStrategies,
   generateTradePlan,
@@ -47,7 +53,7 @@ const AVG_VOLUMES: Record<string, number> = {
   UBER: 20_000_000, SHOP: 8_000_000,
 };
 
-// ─── Yahoo Finance helpers ─────────────────────────────────────────────────────
+// ─── Bar fetching — Alpaca primary, Yahoo Finance fallback ────────────────────
 
 const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
 const YAHOO_HEADERS = {
@@ -56,7 +62,7 @@ const YAHOO_HEADERS = {
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
-async function fetchIntradayBars(symbol: string): Promise<OHLCVBar[] | null> {
+async function fetchIntradayBarsYahoo(symbol: string): Promise<OHLCVBar[] | null> {
   try {
     const resp = await axios.get(`${YAHOO_CHART}/${encodeURIComponent(symbol)}`, {
       params: { range: '1d', interval: '5m', includePrePost: 'false' },
@@ -79,6 +85,15 @@ async function fetchIntradayBars(symbol: string): Promise<OHLCVBar[] | null> {
   } catch {
     return null;
   }
+}
+
+/** Alpaca primary → Yahoo Finance fallback */
+async function fetchIntradayBars(symbol: string): Promise<OHLCVBar[] | null> {
+  if (alpacaConfigured()) {
+    const bars = await fetchAlpacaIntraday(symbol);
+    if (bars && bars.length >= 3) return bars;
+  }
+  return fetchIntradayBarsYahoo(symbol);
 }
 
 function isMarketOpen(): boolean {
@@ -133,10 +148,16 @@ export async function GET(request: Request) {
     const marketOpen = isMarketOpen();
     const minsOpen = minutesSinceOpen();
 
+    // Alpaca snapshots for the whole batch (+ SPY) to get accurate avgDailyVolume
+    const snapshotSymbols = ['SPY', ...batch.filter(s => s !== 'SPY')];
+    const snapshots = alpacaConfigured()
+      ? await fetchAlpacaSnapshots(snapshotSymbols).catch(() => new Map())
+      : new Map();
+
     // Always fetch SPY first for RS computation and regime
     const spyBars = await fetchIntradayBars('SPY').catch(() => null);
 
-    // Fetch batch in parallel
+    // Fetch batch intraday bars in parallel
     const batchResults = await Promise.allSettled(
       batch.map(sym => fetchIntradayBars(sym))
     );
@@ -171,7 +192,10 @@ export async function GET(request: Request) {
       if (result.status !== 'fulfilled' || !result.value) continue;
 
       const bars = result.value;
-      const avgVol = AVG_VOLUMES[sym] ?? 5_000_000;
+      // Use Alpaca prevDailyBar volume when available — more accurate than hardcoded table
+      const alpacaSnap = snapshots.get(sym);
+      const alpacaAvgVol = alpacaSnap ? snapshotToQuote(alpacaSnap).avgDailyVolume : 0;
+      const avgVol = alpacaAvgVol > 0 ? alpacaAvgVol : (AVG_VOLUMES[sym] ?? 5_000_000);
       const features = computeSymbolFeatures(sym, bars, spyBars ?? [], avgVol, minsOpen);
       if (!features) continue;
 
