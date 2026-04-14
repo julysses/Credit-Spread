@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+pandas
+numpy
+scipy
+pyyaml
+pyarrow
+httpx
+tenacity
+loguru
+pytest
+python-dateutil
+pytz
+yfinance

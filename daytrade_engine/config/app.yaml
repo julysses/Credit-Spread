@@ -1,0 +1,8 @@
+timezone: America/New_York
+session_start: "09:30"
+session_end: "16:00"
+enable_paper_mode: true
+default_intraday_timeframe: "1m"
+default_structure_timeframe: "5m"
+daily_lookback: 60
+intraday_lookback: 390

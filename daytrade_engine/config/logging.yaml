@@ -1,0 +1,3 @@
+level: INFO
+serialize: true
+retention_days: 7
