@@ -55,9 +55,6 @@ export function MarketHeader({
               <div className="font-mono font-bold text-white text-lg leading-tight">
                 {spxPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div className={`text-xs font-mono ${spxPositive ? 'text-green-400' : 'text-red-400'}`}>
-                {spxPositive ? '+' : ''}{spxChangePct.toFixed(2)}%
-              </div>
               {spxHigh && spxLow && (
                 <div className="text-xs font-mono text-gray-500 mt-0.5">
                   H {spxHigh.toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -65,6 +62,9 @@ export function MarketHeader({
                   L {spxLow.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                 </div>
               )}
+              <div className={`text-xs font-mono ${spxPositive ? 'text-green-400' : 'text-red-400'}`}>
+                {spxPositive ? '+' : ''}{spxChangePct.toFixed(2)}%
+              </div>
             </div>
 
             <div className="w-px h-10 bg-gray-800" />
