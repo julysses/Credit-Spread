@@ -21,6 +21,8 @@ import type { OptionsTradePlan } from '@/app/api/options/trade-plans/route';
 interface OptionsTabProps {
   spxPrice?: number;
   vix?: number;
+  spxHigh?: number;
+  spxLow?: number;
 }
 
 interface StrategiesData {
@@ -131,7 +133,7 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
   );
 }
 
-export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
+export function OptionsTab({ spxPrice, vix, spxHigh, spxLow }: OptionsTabProps) {
   const [data, setData] = useState<StrategiesData | null>(null);
   const [tradePlans, setTradePlans] = useState<TradePlansData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -177,6 +179,20 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
     <div className="space-y-6">
       {/* ── Regime Banner (self-fetching) ────────────────────────────────────── */}
       <RegimeBanner />
+
+      {/* ── SPX Day Range ────────────────────────────────────────────────────── */}
+      {spxHigh && spxLow && spxPrice && (
+        <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-800/60 text-xs font-mono">
+          <span className="text-gray-500">SPX Day Range</span>
+          <span className="text-emerald-400">H {spxHigh.toFixed(0)}</span>
+          <span className="text-gray-700">|</span>
+          <span className="text-red-400">L {spxLow.toFixed(0)}</span>
+          <span className="text-gray-700">|</span>
+          <span className="text-gray-400">
+            {(spxHigh - spxLow).toFixed(0)} pts ({(((spxHigh - spxLow) / spxPrice) * 100).toFixed(2)}%)
+          </span>
+        </div>
+      )}
 
       {/* ── Rationale ────────────────────────────────────────────────────────── */}
       {data?.regimeRationale && (

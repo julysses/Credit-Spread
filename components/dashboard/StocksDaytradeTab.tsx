@@ -53,7 +53,12 @@ function mergeCandidates(existing: ScanCandidate[], incoming: ScanCandidate[]): 
   return Array.from(map.values());
 }
 
-export function StocksDaytradeTab() {
+interface StocksDaytradeTabProps {
+  spxHigh?: number;
+  spxLow?: number;
+}
+
+export function StocksDaytradeTab({ spxHigh, spxLow }: StocksDaytradeTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'daytrade' | 'swing'>('daytrade');
   const [regime, setRegime] = useState<IntradayRegimeResult | null>(null);
   const [regimeLoading, setRegimeLoading] = useState(true);
@@ -231,6 +236,16 @@ export function StocksDaytradeTab() {
                   <AlertTriangle size={10} />{w}
                 </span>
               ))}
+            </div>
+          )}
+          {spxHigh && spxLow && (
+            <div className="mt-2 pt-2 border-t border-gray-700/40 flex items-center gap-3 text-xs font-mono text-gray-400">
+              <span>SPX Day Range:</span>
+              <span className="text-emerald-400">H {spxHigh.toFixed(0)}</span>
+              <span className="text-gray-600">/</span>
+              <span className="text-red-400">L {spxLow.toFixed(0)}</span>
+              <span className="text-gray-600">·</span>
+              <span>{(spxHigh - spxLow).toFixed(0)} pts wide</span>
             </div>
           )}
         </div>

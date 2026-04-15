@@ -12,6 +12,8 @@ interface MarketHeaderProps {
   riskLevel: string;
   isMarketOpen: boolean;
   lastUpdated: string;
+  spxHigh?: number;
+  spxLow?: number;
 }
 
 export function MarketHeader({
@@ -23,6 +25,8 @@ export function MarketHeader({
   riskLevel,
   isMarketOpen,
   lastUpdated,
+  spxHigh,
+  spxLow,
 }: MarketHeaderProps) {
   const spxPositive = spxChangePct >= 0;
   const vixPositive = vixChangePct >= 0;
@@ -54,6 +58,13 @@ export function MarketHeader({
               <div className={`text-xs font-mono ${spxPositive ? 'text-green-400' : 'text-red-400'}`}>
                 {spxPositive ? '+' : ''}{spxChangePct.toFixed(2)}%
               </div>
+              {spxHigh && spxLow && (
+                <div className="text-xs font-mono text-gray-500 mt-0.5">
+                  H {spxHigh.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  <span className="mx-1 text-gray-700">/</span>
+                  L {spxLow.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                </div>
+              )}
             </div>
 
             <div className="w-px h-10 bg-gray-800" />
