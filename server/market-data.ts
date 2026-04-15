@@ -340,8 +340,10 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const alpacaSpyQuote = alpacaSpy ? snapshotToQuote(alpacaSpy) : null;
 
   // Determine which symbols need a Yahoo Finance fallback
+  // Also fetch Yahoo for SPX when high/low is missing (MarketData.app indices endpoint
+  // often omits intraday H/L even when the price is valid)
   const needsYahoo: ('SPX' | 'VIX' | 'SPY')[] = [];
-  if (!spxRaw || spxRaw.price === 0) needsYahoo.push('SPX');
+  if (!spxRaw || spxRaw.price === 0 || !spxRaw.high || !spxRaw.low) needsYahoo.push('SPX');
   if (!vixRaw || vixRaw.price === 0) needsYahoo.push('VIX');
   // SPY: skip Yahoo if Alpaca already has it
   if (!alpacaSpyQuote && (!spyRaw || spyRaw.price === 0)) needsYahoo.push('SPY');
@@ -397,14 +399,15 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     vixValue = 18;
   }
 
+  const yahooSpx = yahooData.get('SPX');
   const spxQuote: MarketQuote = {
     symbol: 'SPX',
     price: spxPrice,
     change: spxSource?.change ?? 0,
     changePct: spxSource?.changePct ?? 0,
-    high: spxSource?.high ?? 0,
-    low: spxSource?.low ?? 0,
-    open: spxSource?.open ?? 0,
+    high: spxSource?.high || yahooSpx?.high || 0,
+    low: spxSource?.low || yahooSpx?.low || 0,
+    open: spxSource?.open || yahooSpx?.open || 0,
     volume: 0,
     timestamp: Date.now(),
   };
