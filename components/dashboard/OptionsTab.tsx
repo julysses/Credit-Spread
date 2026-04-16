@@ -21,8 +21,6 @@ import type { OptionsTradePlan } from '@/app/api/options/trade-plans/route';
 interface OptionsTabProps {
   spxPrice?: number;
   vix?: number;
-  spxHigh?: number;
-  spxLow?: number;
 }
 
 interface StrategiesData {
@@ -133,7 +131,7 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
   );
 }
 
-export function OptionsTab({ spxPrice, vix, spxHigh, spxLow }: OptionsTabProps) {
+export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
   const [data, setData] = useState<StrategiesData | null>(null);
   const [tradePlans, setTradePlans] = useState<TradePlansData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,22 +173,71 @@ export function OptionsTab({ spxPrice, vix, spxHigh, spxLow }: OptionsTabProps) 
   const swingActive = data?.activeStrategies.filter(s => s.category === 'options_swing') ?? [];
   const activeIds: OptionsStrategyId[] = data?.activeStrategies.map(s => s.id) ?? [];
 
+  // Expected move calculations — formula: SPX × (VIX/100) / √252
+  // 1σ = 68% probability price stays within this range
+  // 2σ = 95% probability — ultra high-confidence iron condor zone
+  const price = spxPrice ?? 0;
+  const vol = vix ?? 0;
+  const em1 = price > 0 && vol > 0 ? price * (vol / 100) / Math.sqrt(252) : 0;
+  const em2 = em1 * 2;
+  const em1High = price + em1;
+  const em1Low  = price - em1;
+  const em2High = price + em2;
+  const em2Low  = price - em2;
+  // IC short strike suggestions: 1σ boundary rounded to nearest 5-pt strike
+  const icCallStrike = em1High > 0 ? Math.ceil(em1High / 5) * 5 : 0;
+  const icPutStrike  = em1Low  > 0 ? Math.floor(em1Low  / 5) * 5 : 0;
+
   return (
     <div className="space-y-6">
       {/* ── Regime Banner (self-fetching) ────────────────────────────────────── */}
       <RegimeBanner />
 
-      {/* ── SPX Day Range ────────────────────────────────────────────────────── */}
-      {spxHigh && spxLow && spxPrice && (
-        <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-gray-900/60 border border-gray-800/60 text-xs font-mono">
-          <span className="text-gray-500">SPX Day Range</span>
-          <span className="text-emerald-400">H {spxHigh.toFixed(0)}</span>
-          <span className="text-gray-700">|</span>
-          <span className="text-red-400">L {spxLow.toFixed(0)}</span>
-          <span className="text-gray-700">|</span>
-          <span className="text-gray-400">
-            {(spxHigh - spxLow).toFixed(0)} pts ({(((spxHigh - spxLow) / spxPrice) * 100).toFixed(2)}%)
-          </span>
+      {/* ── Expected Trading Range ───────────────────────────────────────────── */}
+      {em1 > 0 && (
+        <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-blue-300 uppercase tracking-wider">
+              Expected Day Range — VIX {vol.toFixed(1)}
+            </span>
+            <span className="text-xs text-gray-500 font-mono">±{em1.toFixed(0)} pts / {((em1 / price) * 100).toFixed(2)}%</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {/* 1σ band */}
+            <div className="bg-gray-900/60 rounded-lg p-2.5 border border-gray-700/40">
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">1σ Range · 68% probability</div>
+              <div className="flex items-center justify-between font-mono">
+                <span className="text-red-400 text-sm font-bold">{em1Low.toFixed(0)}</span>
+                <span className="text-gray-600 text-xs">↔</span>
+                <span className="text-emerald-400 text-sm font-bold">{em1High.toFixed(0)}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 mt-1 text-center">{(em1 * 2).toFixed(0)} pt width</div>
+            </div>
+            {/* 2σ band */}
+            <div className="bg-gray-900/60 rounded-lg p-2.5 border border-gray-700/40">
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">2σ Range · 95% probability</div>
+              <div className="flex items-center justify-between font-mono">
+                <span className="text-red-300/70 text-sm font-bold">{em2Low.toFixed(0)}</span>
+                <span className="text-gray-600 text-xs">↔</span>
+                <span className="text-emerald-300/70 text-sm font-bold">{em2High.toFixed(0)}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 mt-1 text-center">{(em2 * 2).toFixed(0)} pt width</div>
+            </div>
+          </div>
+          {/* Iron condor short strike zone */}
+          {icCallStrike > 0 && icPutStrike > 0 && (
+            <div className="flex items-center gap-3 pt-1 text-xs font-mono">
+              <span className="text-gray-500">IC Short Strikes (1σ):</span>
+              <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-2 py-0.5 rounded">
+                Put ≤ {icPutStrike}
+              </span>
+              <span className="text-gray-700">/</span>
+              <span className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">
+                Call ≥ {icCallStrike}
+              </span>
+              <span className="text-gray-600 ml-auto">Sell strikes OUTSIDE this range</span>
+            </div>
+          )}
         </div>
       )}
 

@@ -153,8 +153,6 @@ export default function DashboardPage() {
         riskLevel={conditions?.riskLevel ?? 'moderate'}
         isMarketOpen={state.strategy?.snapshot?.isMarketOpen ?? false}
         lastUpdated={state.lastUpdated}
-        spxHigh={conditions?.spxHigh}
-        spxLow={conditions?.spxLow}
       />
 
       {/* Tab Navigation */}
@@ -299,7 +297,7 @@ export default function DashboardPage() {
         )}
 
         {tab === 'options' && (
-          <OptionsTab spxPrice={conditions?.spxPrice} vix={conditions?.vix} spxHigh={conditions?.spxHigh} spxLow={conditions?.spxLow} />
+          <OptionsTab spxPrice={conditions?.spxPrice} vix={conditions?.vix} />
         )}
 
         {tab === 'stocks' && (

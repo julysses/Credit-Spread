@@ -12,8 +12,6 @@ interface MarketHeaderProps {
   riskLevel: string;
   isMarketOpen: boolean;
   lastUpdated: string;
-  spxHigh?: number;
-  spxLow?: number;
 }
 
 export function MarketHeader({
@@ -25,11 +23,15 @@ export function MarketHeader({
   riskLevel,
   isMarketOpen,
   lastUpdated,
-  spxHigh,
-  spxLow,
 }: MarketHeaderProps) {
   const spxPositive = spxChangePct >= 0;
   const vixPositive = vixChangePct >= 0;
+
+  // 1σ daily expected range: SPX × (VIX/100) / √252
+  // Represents the range where price is expected to stay 68% of the time by end of day
+  const dailyEM = spxPrice * (vix / 100) / Math.sqrt(252);
+  const emHigh = spxPrice + dailyEM;
+  const emLow = spxPrice - dailyEM;
 
   return (
     <header className="border-b border-gray-800/60 bg-gray-950/90 backdrop-blur-sm sticky top-0 z-50">
@@ -55,13 +57,9 @@ export function MarketHeader({
               <div className="font-mono font-bold text-white text-lg leading-tight">
                 {spxPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              {spxHigh && spxLow && (
-                <div className="text-xs font-mono text-gray-500 mt-0.5">
-                  H {spxHigh.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                  <span className="mx-1 text-gray-700">/</span>
-                  L {spxLow.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </div>
-              )}
+              <div className="text-xs font-mono text-blue-400/80 mt-0.5">
+                1σ {emLow.toFixed(0)}–{emHigh.toFixed(0)}
+              </div>
               <div className={`text-xs font-mono ${spxPositive ? 'text-green-400' : 'text-red-400'}`}>
                 {spxPositive ? '+' : ''}{spxChangePct.toFixed(2)}%
               </div>
