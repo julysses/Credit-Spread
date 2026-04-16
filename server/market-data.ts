@@ -400,14 +400,20 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   }
 
   const yahooSpx = yahooData.get('SPX');
+  // Use live SPX/SPY ratio to estimate SPX H/L from Alpaca SPY bars (reliable fallback)
+  const spxSpyRatio = spyPrice > 0 ? spxPrice / spyPrice : 10.05;
+  const spxHighFallback = spyData?.high ? Math.round(spyData.high * spxSpyRatio * 100) / 100 : 0;
+  const spxLowFallback  = spyData?.low  ? Math.round(spyData.low  * spxSpyRatio * 100) / 100 : 0;
+  const spxOpenFallback = spyData?.open ? Math.round(spyData.open * spxSpyRatio * 100) / 100 : 0;
+
   const spxQuote: MarketQuote = {
     symbol: 'SPX',
     price: spxPrice,
     change: spxSource?.change ?? 0,
     changePct: spxSource?.changePct ?? 0,
-    high: spxSource?.high || yahooSpx?.high || 0,
-    low: spxSource?.low || yahooSpx?.low || 0,
-    open: spxSource?.open || yahooSpx?.open || 0,
+    high: spxSource?.high || yahooSpx?.high || spxHighFallback,
+    low: spxSource?.low  || yahooSpx?.low  || spxLowFallback,
+    open: spxSource?.open || yahooSpx?.open || spxOpenFallback,
     volume: 0,
     timestamp: Date.now(),
   };
