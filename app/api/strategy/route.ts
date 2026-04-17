@@ -134,20 +134,22 @@ interface MacroEventInfo {
   name: string;
   description: string;
   scheduledTime: string;
-  sources: { headline: string; url: string }[];
+  sources: { headline: string; url: string; source?: string }[];
 }
 
 const MACRO_EVENT_DESCRIPTIONS: Record<string, string> = {
-  'FOMC Rate Decision':  'Federal Reserve interest rate decision and monetary policy statement',
-  'CPI Release':         'Bureau of Labor Statistics Consumer Price Index inflation report',
-  'NFP Jobs Report':     'Bureau of Labor Statistics nonfarm payroll and unemployment report',
-  'GDP Release':         'Bureau of Economic Analysis gross domestic product estimate',
-  'PPI Release':         'Bureau of Labor Statistics Producer Price Index report',
-  'PCE Release':         'Bureau of Economic Analysis Personal Consumption Expenditures price index',
-  'Earnings Risk':       'Major corporate earnings announcements with broad market impact',
-  'Fiscal Event':        'Congressional action on debt ceiling, government spending, or fiscal policy',
-  'Geopolitical Event':  'International conflict, sanctions, or geopolitical shock affecting markets',
-  'Macro Event':         'High-impact macroeconomic or geopolitical event requiring trade caution',
+  'FOMC Rate Decision':   'Federal Reserve interest rate decision and monetary policy statement',
+  'CPI Release':          'Bureau of Labor Statistics Consumer Price Index inflation report',
+  'NFP Jobs Report':      'Bureau of Labor Statistics nonfarm payroll and unemployment report',
+  'GDP Release':          'Bureau of Economic Analysis gross domestic product estimate',
+  'PPI Release':          'Bureau of Labor Statistics Producer Price Index report',
+  'PCE Release':          'Bureau of Economic Analysis Personal Consumption Expenditures price index',
+  'Earnings Risk':        'Major corporate earnings announcements with broad market impact',
+  'Fiscal Event':         'Congressional action on debt ceiling, government spending, or fiscal policy',
+  'Geopolitical Event':   'International conflict, sanctions, or geopolitical shock affecting markets',
+  'Trade Policy Event':   'Trade negotiations, tariffs, or trade policy action affecting market sentiment',
+  'Energy Market Event':  'Significant energy supply shock or oil market disruption',
+  'Macro Event':          'High-impact macroeconomic or geopolitical event requiring trade caution',
 };
 
 function extractScheduledTime(text: string): string {
@@ -166,18 +168,28 @@ function extractScheduledTime(text: string): string {
   return 'Today';
 }
 
-function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: string; url: string; macroRelevance: boolean; riskImpact: string }[]; keyRisks: string[] }): MacroEventInfo {
-  const macroItems = newsAnalysis.items.filter(
+function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: string; url: string; source?: string; macroRelevance: boolean; geopoliticalRisk?: boolean; riskImpact: string }[]; keyRisks: string[] }): MacroEventInfo {
+  // Primary: items flagged as macro-relevant with high risk impact
+  let triggerItems = newsAnalysis.items.filter(
     i => i.macroRelevance && i.riskImpact === 'high'
   );
+  // Fallback 1: any high-risk item (captures geopolitical triggers)
+  if (triggerItems.length === 0) {
+    triggerItems = newsAnalysis.items.filter(i => i.riskImpact === 'high');
+  }
+  // Fallback 2: any macro-relevant or geopolitical item
+  if (triggerItems.length === 0) {
+    triggerItems = newsAnalysis.items.filter(i => i.macroRelevance || i.geopoliticalRisk);
+  }
 
-  const sources = macroItems.slice(0, 3).map(i => ({
+  const sources = triggerItems.slice(0, 3).map(i => ({
     headline: i.headline,
     url: i.url,
+    source: i.source,
   }));
 
-  // Detect event type from headlines + summaries
-  const text = macroItems
+  // Detect event type from combined headlines + summaries
+  const text = triggerItems
     .map(i => `${i.headline} ${i.summary}`)
     .join(' ')
     .toLowerCase();
@@ -191,6 +203,8 @@ function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: st
   else if (/pce|personal consumption expenditure/.test(text)) name = 'PCE Release';
   else if (/earnings|quarterly results|earning season/.test(text)) name = 'Earnings Risk';
   else if (/debt ceiling|government shutdown|fiscal cliff/.test(text)) name = 'Fiscal Event';
+  else if (/tariff|trade talks|trade war|trade deal|trade policy/.test(text)) name = 'Trade Policy Event';
+  else if (/energy crisis|oil supply|opec|energy shock|oil price/.test(text)) name = 'Energy Market Event';
   else if (/geopolit|war|sanctions|military|conflict/.test(text)) name = 'Geopolitical Event';
 
   const description = MACRO_EVENT_DESCRIPTIONS[name] ?? MACRO_EVENT_DESCRIPTIONS['Macro Event'];

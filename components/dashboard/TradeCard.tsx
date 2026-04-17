@@ -16,7 +16,7 @@ interface NoTradeEvent {
   name: string;
   description?: string;
   scheduledTime?: string;
-  sources: { headline: string; url: string }[];
+  sources: { headline: string; url: string; source?: string }[];
 }
 
 interface TradeCardProps {
@@ -114,14 +114,18 @@ export function TradeCard({
                         className="flex items-start gap-2 text-xs text-blue-400 hover:text-blue-300 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-800/30 rounded px-3 py-2 transition-colors"
                       >
                         <span className="mt-0.5 shrink-0">📰</span>
-                        <span className="line-clamp-2">{s.headline}</span>
-                        <span className="shrink-0 text-gray-600">↗</span>
+                        <span className="flex-1 line-clamp-2">{s.headline}</span>
+                        <span className="shrink-0 flex flex-col items-end gap-0.5">
+                          {s.source && <span className="text-gray-500">{s.source}</span>}
+                          <span className="text-gray-600">↗</span>
+                        </span>
                       </a>
                     )
                     : (
                       <div key={i} className="flex items-start gap-2 text-xs text-gray-400 bg-gray-800/40 rounded px-3 py-2">
                         <span className="mt-0.5 shrink-0">📰</span>
-                        <span className="line-clamp-2">{s.headline}</span>
+                        <span className="flex-1 line-clamp-2">{s.headline}</span>
+                        {s.source && <span className="shrink-0 text-gray-600">{s.source}</span>}
                       </div>
                     )
                 ))}
