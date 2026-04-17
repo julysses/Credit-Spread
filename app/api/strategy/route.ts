@@ -132,7 +132,38 @@ function getCurrentTimeHHMM(): number {
 
 interface MacroEventInfo {
   name: string;
+  description: string;
+  scheduledTime: string;
   sources: { headline: string; url: string }[];
+}
+
+const MACRO_EVENT_DESCRIPTIONS: Record<string, string> = {
+  'FOMC Rate Decision':  'Federal Reserve interest rate decision and monetary policy statement',
+  'CPI Release':         'Bureau of Labor Statistics Consumer Price Index inflation report',
+  'NFP Jobs Report':     'Bureau of Labor Statistics nonfarm payroll and unemployment report',
+  'GDP Release':         'Bureau of Economic Analysis gross domestic product estimate',
+  'PPI Release':         'Bureau of Labor Statistics Producer Price Index report',
+  'PCE Release':         'Bureau of Economic Analysis Personal Consumption Expenditures price index',
+  'Earnings Risk':       'Major corporate earnings announcements with broad market impact',
+  'Fiscal Event':        'Congressional action on debt ceiling, government spending, or fiscal policy',
+  'Geopolitical Event':  'International conflict, sanctions, or geopolitical shock affecting markets',
+  'Macro Event':         'High-impact macroeconomic or geopolitical event requiring trade caution',
+};
+
+function extractScheduledTime(text: string): string {
+  const clockMatch = text.match(
+    /\b(\d{1,2}:\d{2}\s*(?:am|pm|a\.m\.|p\.m\.)?(?:\s*et|est|edt)?)\b/i
+  );
+  if (clockMatch) {
+    return clockMatch[1].trim().toUpperCase().replace(/\./g, '').replace(/\s+/g, ' ');
+  }
+  const dayMatch = text.match(/\b(?:this\s+)?(monday|tuesday|wednesday|thursday|friday)\b/i);
+  if (dayMatch) {
+    return dayMatch[0].charAt(0).toUpperCase() + dayMatch[0].slice(1).toLowerCase();
+  }
+  if (/\btomorrow\b/i.test(text)) return 'Tomorrow';
+  if (/\blater today\b|\bthis morning\b|\bthis afternoon\b/i.test(text)) return 'Later Today';
+  return 'Today';
 }
 
 function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: string; url: string; macroRelevance: boolean; riskImpact: string }[]; keyRisks: string[] }): MacroEventInfo {
@@ -162,5 +193,8 @@ function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: st
   else if (/debt ceiling|government shutdown|fiscal cliff/.test(text)) name = 'Fiscal Event';
   else if (/geopolit|war|sanctions|military|conflict/.test(text)) name = 'Geopolitical Event';
 
-  return { name, sources };
+  const description = MACRO_EVENT_DESCRIPTIONS[name] ?? MACRO_EVENT_DESCRIPTIONS['Macro Event'];
+  const scheduledTime = extractScheduledTime(text);
+
+  return { name, description, scheduledTime, sources };
 }

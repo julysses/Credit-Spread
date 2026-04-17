@@ -14,6 +14,8 @@ interface SpreadLeg {
 
 interface NoTradeEvent {
   name: string;
+  description?: string;
+  scheduledTime?: string;
   sources: { headline: string; url: string }[];
 }
 
@@ -67,8 +69,10 @@ export function TradeCard({
   onAcceptTrade,
 }: TradeCardProps) {
   if (tradeType === 'no_trade') {
-    const eventName = noTradeEvent?.name ?? 'Macro Event';
-    const sources = noTradeEvent?.sources ?? [];
+    const eventName     = noTradeEvent?.name          ?? 'Macro Event';
+    const description   = noTradeEvent?.description   ?? '';
+    const scheduledTime = noTradeEvent?.scheduledTime  ?? 'Today';
+    const sources       = noTradeEvent?.sources        ?? [];
 
     return (
       <Card className="border-yellow-800/40">
@@ -84,6 +88,15 @@ export function TradeCard({
             <div className="text-yellow-400 font-semibold text-lg">Standing Aside</div>
             <div className="text-sm text-gray-300 mt-1 font-medium">{eventName}</div>
             <div className="text-xs text-gray-500 mt-0.5">per institutional SOP Rule 3</div>
+            <div className="flex items-center justify-center gap-1 mt-2 text-xs text-yellow-300/80 font-medium">
+              <span>🕐</span>
+              <span>{scheduledTime}</span>
+            </div>
+            {description && (
+              <div className="mt-2 text-xs text-gray-500 leading-relaxed max-w-xs mx-auto">
+                {description}
+              </div>
+            )}
           </div>
 
           {sources.length > 0 && (
