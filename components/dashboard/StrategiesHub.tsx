@@ -38,15 +38,15 @@ export function StrategiesHub({ spxPrice, vix }: StrategiesHubProps) {
               7 Strategies · SPX Section 1256
             </span>
           </div>
-          <div className="flex-1 h-px bg-slate-800 hidden sm:block" />
+          <div className="flex-1 h-px bg-sd-muted hidden sm:block" />
           {/* Toggle between Library and Performance */}
-          <div className="flex rounded-lg border border-slate-700 overflow-hidden text-xs font-medium">
+          <div className="flex rounded-lg border border-sd-line overflow-hidden text-xs font-medium">
             <button
               onClick={() => setShowPerf(false)}
               className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
                 !showPerf
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-900 text-slate-400 hover:text-white'
+                  : 'bg-sd-card text-gray-400 hover:text-white'
               }`}
             >
               <BookOpen size={12} />
@@ -54,10 +54,10 @@ export function StrategiesHub({ spxPrice, vix }: StrategiesHubProps) {
             </button>
             <button
               onClick={() => setShowPerf(true)}
-              className={`px-3 py-1.5 flex items-center gap-1.5 border-l border-slate-700 transition-colors ${
+              className={`px-3 py-1.5 flex items-center gap-1.5 border-l border-sd-line transition-colors ${
                 showPerf
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-900 text-slate-400 hover:text-white'
+                  : 'bg-sd-card text-gray-400 hover:text-white'
               }`}
             >
               <BarChart3 size={12} />
@@ -71,23 +71,23 @@ export function StrategiesHub({ spxPrice, vix }: StrategiesHubProps) {
       </div>
 
       {/* ═══ SECTION B — SWING & INCOME STRATEGIES (collapsible) ═══ */}
-      <div className="border-2 border-slate-700 rounded-xl overflow-hidden">
+      <div className="border border-sd-line2 rounded-xl overflow-hidden">
         <button
           onClick={() => setSwingOpen(o => !o)}
-          className="w-full flex items-center gap-3 px-5 py-4 bg-slate-900/80 hover:bg-slate-800/80 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-5 py-4 bg-sd-card/80 hover:bg-sd-muted/80 transition-colors text-left"
         >
           {swingOpen
-            ? <ChevronDown size={16} className="text-slate-400 shrink-0" />
-            : <ChevronRight size={16} className="text-slate-400 shrink-0" />}
+            ? <ChevronDown size={16} className="text-gray-400 shrink-0" />
+            : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
           <div className="flex items-center gap-2 flex-1">
-            <span className="text-sm font-semibold text-slate-100">
+            <span className="text-sm font-semibold text-gray-100">
               Swing &amp; Multi-Day Income Strategies
             </span>
-            <span className="text-xs text-slate-500 border border-slate-700 rounded-full px-2 py-0.5">
+            <span className="text-xs text-gray-500 border border-sd-line rounded-full px-2 py-0.5">
               Wheel · PMCC · IC 45DTE · Jade Lizard · Verticals
             </span>
           </div>
-          <span className="text-xs text-slate-500 shrink-0">
+          <span className="text-xs text-gray-500 shrink-0">
             {swingOpen ? 'Click to collapse' : 'Click to expand'}
           </span>
         </button>
@@ -95,23 +95,23 @@ export function StrategiesHub({ spxPrice, vix }: StrategiesHubProps) {
       </div>
 
       {/* ═══ SECTION C — LIVE ANALYSIS (collapsible) ═══ */}
-      <div className="border border-slate-800 rounded-xl overflow-hidden">
+      <div className="border border-sd-line rounded-xl overflow-hidden">
         <button
           onClick={() => setLiveOpen(o => !o)}
-          className="w-full flex items-center gap-3 px-5 py-3.5 bg-slate-900/60 hover:bg-slate-800/60 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-5 py-3.5 bg-sd-card/60 hover:bg-sd-muted/60 transition-colors text-left"
         >
           {liveOpen
-            ? <ChevronDown size={14} className="text-slate-500 shrink-0" />
-            : <ChevronRight size={14} className="text-slate-500 shrink-0" />}
-          <span className="text-sm font-medium text-slate-300">
+            ? <ChevronDown size={14} className="text-gray-500 shrink-0" />
+            : <ChevronRight size={14} className="text-gray-500 shrink-0" />}
+          <span className="text-sm font-medium text-gray-300">
             ⚡ Live 0DTE Analysis &amp; Directional Bias
           </span>
-          <span className="ml-auto text-xs text-slate-500 shrink-0">
+          <span className="ml-auto text-xs text-gray-500 shrink-0">
             {liveOpen ? 'Collapse' : 'Expand for live signals'}
           </span>
         </button>
         {liveOpen && (
-          <div className="p-5 space-y-5 border-t border-slate-800">
+          <div className="p-5 space-y-5 border-t border-sd-line">
             <DirectionalBiasBar />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <IntradayPanel spxPrice={spxPrice} vix={vix} />
@@ -141,12 +141,12 @@ function ZeroDTERules() {
               { num: 5,  rule: 'Stop loss at 1.5× credit — no exceptions',                    color: 'text-red-400' },
               { num: 6,  rule: 'Close ALL positions before 3:45 PM ET',                        color: 'text-orange-400' },
               { num: 7,  rule: 'Gamma emergency: exit if price approaches short strike',       color: 'text-red-400' },
-              { num: 8,  rule: 'Max 3 trades per day — quality over quantity',                 color: 'text-slate-400' },
+              { num: 8,  rule: 'Max 3 trades per day — quality over quantity',                 color: 'text-gray-400' },
               { num: 9,  rule: 'Do NOT trade 0DTE on FOMC, CPI, or NFP release days',         color: 'text-red-400' },
             ].map(item => (
               <div key={item.num} className="flex items-start gap-2.5 text-xs">
                 <span className={`${item.color} font-bold w-4 shrink-0`}>{item.num}.</span>
-                <span className="text-slate-400">{item.rule}</span>
+                <span className="text-gray-400">{item.rule}</span>
               </div>
             ))}
           </div>
@@ -215,20 +215,20 @@ function SwingStrategiesAccordion() {
         <div key={i}>
           <button
             onClick={() => setOpenIndex(openIndex === i ? null : i)}
-            className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-800/40 transition-colors text-left"
+            className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-sd-muted/40 transition-colors text-left"
           >
             {openIndex === i
-              ? <ChevronDown size={14} className="text-slate-500 shrink-0" />
-              : <ChevronRight size={14} className="text-slate-500 shrink-0" />}
+              ? <ChevronDown size={14} className="text-gray-500 shrink-0" />
+              : <ChevronRight size={14} className="text-gray-500 shrink-0" />}
             <span className="text-sm text-slate-200 font-medium">{s.title}</span>
-            <span className="ml-auto text-xs text-slate-500 border border-slate-700 rounded-full px-2 py-0.5 whitespace-nowrap shrink-0">
+            <span className="ml-auto text-xs text-gray-500 border border-sd-line rounded-full px-2 py-0.5 whitespace-nowrap shrink-0">
               {s.tag}
             </span>
           </button>
           {openIndex === i && (
-            <div className="px-5 pb-4 pt-2 bg-slate-900/30 space-y-2">
+            <div className="px-5 pb-4 pt-2 bg-sd-card/30 space-y-2">
               {s.body.map((line, j) => (
-                <p key={j} className="text-xs text-slate-400 leading-relaxed">{line}</p>
+                <p key={j} className="text-xs text-gray-400 leading-relaxed">{line}</p>
               ))}
             </div>
           )}

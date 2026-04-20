@@ -437,8 +437,8 @@ function RegimeFilterBar({
   }) {
     return (
       <div>
-        <div className="text-xs text-slate-400 mb-1.5">{label}</div>
-        <div className="flex rounded-lg overflow-hidden border border-slate-700">
+        <div className="text-xs text-gray-400 mb-1.5">{label}</div>
+        <div className="flex rounded-lg overflow-hidden border border-sd-line">
           {options.map((opt, i) => (
             <button
               key={opt}
@@ -446,8 +446,8 @@ function RegimeFilterBar({
               className={`flex-1 text-xs py-1.5 px-2 transition-colors font-medium ${
                 value === opt
                   ? colorMap[opt] + ' text-white'
-                  : 'bg-slate-800 text-slate-500 hover:text-slate-300'
-              } ${i > 0 ? 'border-l border-slate-700' : ''}`}
+                  : 'bg-sd-muted text-gray-500 hover:text-gray-300'
+              } ${i > 0 ? 'border-l border-sd-line' : ''}`}
             >
               {opt.charAt(0).toUpperCase() + opt.slice(1)}
             </button>
@@ -458,15 +458,15 @@ function RegimeFilterBar({
   }
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
+    <div className="bg-sd-card border border-sd-line rounded-xl p-4 mb-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <AlertTriangle size={14} className="text-yellow-400" />
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Regime Filter</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Regime Filter</h3>
         </div>
         <div className="flex items-center gap-2">
           {loading ? (
-            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
               <RefreshCw size={10} className="animate-spin" /> Fetching live data…
             </span>
           ) : lastUpdated ? (
@@ -480,7 +480,7 @@ function RegimeFilterBar({
               onClick={onRefresh}
               disabled={loading}
               title="Refresh live data"
-              className="p-1 rounded text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+              className="p-1 rounded text-gray-500 hover:text-white transition-colors disabled:opacity-40"
             >
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -490,14 +490,14 @@ function RegimeFilterBar({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {/* VIX Level */}
         <div>
-          <div className="text-xs text-slate-400 mb-1.5">VIX Level</div>
+          <div className="text-xs text-gray-400 mb-1.5">VIX Level</div>
           <div className="relative">
             <input
               type="number"
               value={regime.vixLevel}
               onChange={e => onChange({ ...regime, vixLevel: e.target.value })}
               placeholder="e.g. 18.5"
-              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+              className="w-full bg-sd-muted border border-sd-line rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-sd-accent"
             />
           </div>
           {vix > 0 && (
@@ -539,7 +539,7 @@ function RegimeFilterBar({
       {/* Verdict */}
       <div className={`border rounded-lg px-4 py-2.5 flex items-center gap-3 ${verdict.cls}`}>
         <span className="text-sm font-bold">{verdict.label}</span>
-        <span className="text-slate-400">—</span>
+        <span className="text-gray-400">—</span>
         <span className="text-sm">{verdict.desc}</span>
       </div>
     </div>
@@ -551,26 +551,26 @@ function RegimeFilterBar({
 
 function StrategyComparisonTable({ strategies }: { strategies: Strategy[] }) {
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 overflow-x-auto">
-      <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300 mb-3">Strategy Comparison</h3>
+    <div className="bg-sd-card border border-sd-line rounded-xl p-4 overflow-x-auto">
+      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400 mb-3">Strategy Comparison</h3>
       <table className="w-full text-xs min-w-[700px]">
         <thead>
-          <tr className="border-b border-slate-700">
+          <tr className="border-b border-sd-line">
             {['#', 'Strategy', 'Win Rate', 'Structure', 'Best Entry', 'VIX', 'GEX', '1256'].map(h => (
-              <th key={h} className="text-left py-2 px-2 text-slate-400 font-medium">{h}</th>
+              <th key={h} className="text-left py-2 px-2 text-gray-400 font-medium">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {strategies.map((s, i) => (
-            <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/40 transition-colors">
-              <td className="py-2 px-2 text-slate-500">{i + 1}</td>
+            <tr key={s.id} className="border-b border-sd-line/50 hover:bg-sd-muted/40 transition-colors">
+              <td className="py-2 px-2 text-gray-500">{i + 1}</td>
               <td className="py-2 px-2 font-medium text-white">{s.name}</td>
               <td className="py-2 px-2"><WinRateBadge rate={s.winRate} num={s.winRateNum} /></td>
-              <td className="py-2 px-2 text-slate-400">{s.structure}</td>
-              <td className="py-2 px-2 text-slate-300">{s.entryWindow}</td>
-              <td className="py-2 px-2 text-slate-400">{s.vixFilter}</td>
-              <td className="py-2 px-2 text-slate-400">{s.gexFilter}</td>
+              <td className="py-2 px-2 text-gray-400">{s.structure}</td>
+              <td className="py-2 px-2 text-gray-300">{s.entryWindow}</td>
+              <td className="py-2 px-2 text-gray-400">{s.vixFilter}</td>
+              <td className="py-2 px-2 text-gray-400">{s.gexFilter}</td>
               <td className="py-2 px-2 text-green-400">✓</td>
             </tr>
           ))}
@@ -588,7 +588,7 @@ function WinRateBadge({ rate, num }: { rate: string; num: number }) {
       ? 'bg-green-900/40 text-green-400 border-green-700'
       : num >= 65
       ? 'bg-yellow-900/40 text-yellow-400 border-yellow-700'
-      : 'bg-slate-800 text-slate-400 border-slate-600';
+      : 'bg-sd-muted text-gray-400 border-sd-line';
   return (
     <span className={`border rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cls}`}>
       {rate}
@@ -602,7 +602,7 @@ function WinRateBadge({ rate, num }: { rate: string; num: number }) {
 
 function LiveMetricBox({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
-    <div className="bg-gray-900/60 rounded-lg p-2.5 text-center">
+    <div className="bg-sd-muted/60 rounded-lg p-2.5 text-center">
       <div className="text-[10px] text-gray-600 mb-0.5">{label}</div>
       <div className={`text-sm font-bold font-mono ${valueClass ?? 'text-white'}`}>{value}</div>
     </div>
@@ -631,7 +631,7 @@ function LiveLegRow({
 }) {
   const isSell = action === 'sell';
   return (
-    <div className="grid grid-cols-6 gap-1 items-center py-1 text-xs font-mono border-b border-gray-800/50 last:border-0">
+    <div className="grid grid-cols-6 gap-1 items-center py-1 text-xs font-mono border-b border-sd-line/50 last:border-0">
       <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase text-center ${
         isSell ? 'bg-red-900/60 text-red-400' : 'bg-green-900/60 text-green-400'
       }`}>{isSell ? 'SELL' : 'BUY'}</span>
@@ -738,39 +738,39 @@ function TradeLoggerForm({
       <div className="bg-green-950/40 border border-green-700 rounded-xl p-6 text-center">
         <CheckCircle2 size={32} className="text-green-400 mx-auto mb-2" />
         <p className="text-green-300 font-semibold">Trade logged successfully!</p>
-        <button onClick={onClose} className="mt-3 text-xs text-slate-400 hover:text-white">Close</button>
+        <button onClick={onClose} className="mt-3 text-xs text-gray-400 hover:text-white">Close</button>
       </div>
     );
   }
 
   const Field = ({ label, fieldKey, type = 'text', placeholder = '' }: { label: string; fieldKey: string; type?: string; placeholder?: string }) => (
     <div>
-      <label className="text-xs text-slate-400 block mb-1">{label}</label>
+      <label className="text-xs text-gray-400 block mb-1">{label}</label>
       <input
         type={type}
         value={(form as any)[fieldKey]}
         onChange={e => set(fieldKey, e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+        className="w-full bg-sd-muted border border-sd-line rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-sd-accent"
       />
     </div>
   );
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
+    <div className="bg-sd-muted/60 border border-sd-line rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <ClipboardList size={15} className="text-blue-400" />
           <span className="text-sm font-semibold text-white">Log This Trade</span>
-          <span className="text-xs text-slate-500">→ {strategyId}</span>
+          <span className="text-xs text-gray-500">→ {strategyId}</span>
         </div>
-        <button onClick={onClose} className="text-slate-500 hover:text-white text-lg leading-none">×</button>
+        <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none">×</button>
       </div>
 
       {/* Credit spread summary */}
       {(form.shortPutStrike || form.shortCallStrike) && (
-        <div className="bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2.5 mb-3">
-          <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-1.5">
+        <div className="bg-sd-card border border-sd-line rounded-lg px-3 py-2.5 mb-3">
+          <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1.5">
             Credit Spread Structure · SPX · Exp {form.expirationDate}
           </div>
           <div className="space-y-1">
@@ -782,7 +782,7 @@ function TradeLoggerForm({
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
-                  <span className="text-slate-400 font-mono">SPX {form.expirationDate} {form.longPutStrike || '—'} Put</span>
+                  <span className="text-gray-400 font-mono">SPX {form.expirationDate} {form.longPutStrike || '—'} Put</span>
                 </div>
               </>
             )}
@@ -794,12 +794,12 @@ function TradeLoggerForm({
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="bg-red-900/50 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded">BUY</span>
-                  <span className="text-slate-400 font-mono">SPX {form.expirationDate} {form.longCallStrike || '—'} Call</span>
+                  <span className="text-gray-400 font-mono">SPX {form.expirationDate} {form.longCallStrike || '—'} Call</span>
                 </div>
               </>
             )}
             {form.entryCredit && (
-              <div className="text-xs text-slate-500 mt-1 pt-1 border-t border-slate-800">
+              <div className="text-xs text-gray-500 mt-1 pt-1 border-t border-sd-line">
                 Net Credit: <span className="text-green-400 font-semibold">${form.entryCredit}</span>
                 {form.contracts && form.contracts !== '1' && <span> × {form.contracts} contracts</span>}
               </div>
@@ -820,11 +820,11 @@ function TradeLoggerForm({
         <Field label="VIX at Entry" fieldKey="vixAtEntry" type="number" placeholder="18.5" />
         <Field label="VIX1D at Entry" fieldKey="vix1dAtEntry" type="number" placeholder="22.1" />
         <div>
-          <label className="text-xs text-slate-400 block mb-1">Structure Type</label>
+          <label className="text-xs text-gray-400 block mb-1">Structure Type</label>
           <select
             value={form.structureType}
             onChange={e => set('structureType', e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+            className="w-full bg-sd-muted border border-sd-line rounded px-2 py-1.5 text-sm text-white"
           >
             <option value="iron_condor">Iron Condor</option>
             <option value="put_credit_spread">Put Credit Spread</option>
@@ -840,15 +840,15 @@ function TradeLoggerForm({
         <Field label="Entry Time" fieldKey="entryTime" type="time" />
         <Field label="Contracts" fieldKey="contracts" type="number" placeholder="1" />
         <div>
-          <label className="text-xs text-slate-400 block mb-1">GEX Environment</label>
-          <div className="flex rounded-lg overflow-hidden border border-slate-700">
+          <label className="text-xs text-gray-400 block mb-1">GEX Environment</label>
+          <div className="flex rounded-lg overflow-hidden border border-sd-line">
             {(['positive', 'negative'] as GEXEnv[]).map((opt, i) => (
               <button
                 key={opt}
                 onClick={() => setForm(f => ({ ...f, gexEnvironment: opt }))}
                 className={`flex-1 text-xs py-1.5 transition-colors font-medium ${
-                  form.gexEnvironment === opt ? (opt === 'positive' ? 'bg-green-700 text-white' : 'bg-red-700 text-white') : 'bg-slate-800 text-slate-500'
-                } ${i > 0 ? 'border-l border-slate-700' : ''}`}
+                  form.gexEnvironment === opt ? (opt === 'positive' ? 'bg-green-700 text-white' : 'bg-red-700 text-white') : 'bg-sd-muted text-gray-500'
+                } ${i > 0 ? 'border-l border-sd-line' : ''}`}
               >
                 {opt.charAt(0).toUpperCase() + opt.slice(1)}
               </button>
@@ -857,15 +857,15 @@ function TradeLoggerForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3 border-t border-slate-700 pt-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3 border-t border-sd-line pt-3">
         <Field label="Exit Time" fieldKey="exitTime" type="time" />
         <Field label="Exit Debit ($)" fieldKey="exitDebit" type="number" placeholder="0.50" />
         <div>
-          <label className="text-xs text-slate-400 block mb-1">Outcome</label>
+          <label className="text-xs text-gray-400 block mb-1">Outcome</label>
           <select
             value={form.outcome}
             onChange={e => set('outcome', e.target.value)}
-            className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white"
+            className="w-full bg-sd-muted border border-sd-line rounded px-2 py-1.5 text-sm text-white"
           >
             <option value="max_profit">Max Profit</option>
             <option value="partial_profit">Partial Profit</option>
@@ -878,13 +878,13 @@ function TradeLoggerForm({
       </div>
 
       <div className="mb-4">
-        <label className="text-xs text-slate-400 block mb-1">Notes</label>
+        <label className="text-xs text-gray-400 block mb-1">Notes</label>
         <textarea
           value={form.notes}
           onChange={e => set('notes', e.target.value)}
           rows={2}
           placeholder="Market context, adjustments, observations…"
-          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white resize-none focus:outline-none focus:border-blue-500"
+          className="w-full bg-sd-muted border border-sd-line rounded px-2 py-1.5 text-sm text-white resize-none focus:outline-none focus:border-sd-accent"
         />
       </div>
 
@@ -903,7 +903,7 @@ function TradeLoggerForm({
           <Send size={13} />
           {submitting ? 'Saving…' : 'Save Trade'}
         </button>
-        <button onClick={onClose} className="text-sm text-slate-400 hover:text-white px-3 py-2 transition-colors">
+        <button onClick={onClose} className="text-sm text-gray-400 hover:text-white px-3 py-2 transition-colors">
           Cancel
         </button>
       </div>
@@ -998,26 +998,26 @@ function StrategyAccordionRow({
       {/* ── Collapsed header row (always visible) ── */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-800/50 transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-sd-muted/40 transition-colors text-left"
       >
-        <span className="w-6 h-6 rounded-full bg-slate-700 text-slate-300 text-xs flex items-center justify-center font-bold shrink-0">
+        <span className="w-6 h-6 rounded-full bg-sd-muted text-gray-300 text-xs flex items-center justify-center font-bold shrink-0">
           {index}
         </span>
-        <span className="text-sm font-semibold text-slate-100 flex-1 min-w-0">
+        <span className="text-sm font-semibold text-gray-100 flex-1 min-w-0">
           {strategy.name}
         </span>
         <WinRateBadge rate={strategy.winRate} num={strategy.winRateNum} />
-        <span className="hidden md:block text-xs text-slate-500 w-24 shrink-0 text-right">{strategy.structure}</span>
-        <span className="hidden lg:block text-xs text-slate-500 w-36 shrink-0 text-right">{strategy.entryWindow}</span>
-        <span className="hidden sm:block text-xs text-slate-500 w-16 shrink-0 text-right">VIX {strategy.vixFilter}</span>
+        <span className="hidden md:block text-xs text-gray-500 w-24 shrink-0 text-right">{strategy.structure}</span>
+        <span className="hidden lg:block text-xs text-gray-500 w-36 shrink-0 text-right">{strategy.entryWindow}</span>
+        <span className="hidden sm:block text-xs text-gray-500 w-16 shrink-0 text-right">VIX {strategy.vixFilter}</span>
         {isOpen
-          ? <ChevronDown size={14} className="text-slate-400 shrink-0" />
-          : <ChevronRight size={14} className="text-slate-400 shrink-0" />}
+          ? <ChevronDown size={14} className="text-gray-400 shrink-0" />
+          : <ChevronRight size={14} className="text-gray-400 shrink-0" />}
       </button>
 
       {/* ── Expanded inline panel ── */}
       {isOpen && (
-        <div className="px-4 pb-5 pt-3 bg-slate-900/30 border-t border-slate-800 space-y-4">
+        <div className="px-4 pb-5 pt-3 bg-sd-muted/20 border-t border-sd-line space-y-4">
           {/* Header info */}
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -1025,15 +1025,15 @@ function StrategyAccordionRow({
                 {strategy.structure}
               </span>
               <WinRateBadge rate={strategy.winRate} num={strategy.winRateNum} />
-              <span className="text-xs border rounded-full px-2 py-0.5 border-slate-600 bg-slate-800 text-slate-400">
+              <span className="text-xs border rounded-full px-2 py-0.5 border-sd-line bg-sd-muted text-gray-400">
                 Section 1256 (SPX)
               </span>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">{strategy.philosophy}</p>
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
-              <span>Entry: <span className="text-slate-300">{strategy.entryWindow}</span></span>
-              <span>VIX: <span className="text-slate-300">{strategy.vixFilter}</span></span>
-              <span>GEX: <span className="text-slate-300">{strategy.gexFilter}</span></span>
+            <p className="text-xs text-gray-400 leading-relaxed">{strategy.philosophy}</p>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+              <span>Entry: <span className="text-gray-300">{strategy.entryWindow}</span></span>
+              <span>VIX: <span className="text-gray-300">{strategy.vixFilter}</span></span>
+              <span>GEX: <span className="text-gray-300">{strategy.gexFilter}</span></span>
             </div>
           </div>
 
@@ -1062,12 +1062,12 @@ function StrategyAccordionRow({
             const timeExit = timeExits[strategy.id] ?? { time: '3:45 PM ET', sub: 'Mandatory close' };
 
             return (
-              <div className="bg-gray-950/60 border border-gray-700/50 rounded-xl p-4 space-y-3">
+              <div className="bg-sd-card border border-sd-line rounded-xl p-4 space-y-3">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold bg-green-600 text-white px-2 py-0.5 rounded-full">LIVE</span>
-                    <span className="text-xs font-semibold uppercase tracking-widest text-green-300">Live Entry Setup</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-green-300">Live Entry Setup</span>
                   </div>
                   <span className="text-[10px] text-gray-500 font-mono">
                     {today} · 0DTE ·{' '}
@@ -1086,7 +1086,7 @@ function StrategyAccordionRow({
                 </div>
 
                 {/* Trade Structure */}
-                <div className="bg-gray-900/60 rounded-lg p-3 border border-gray-700/30">
+                <div className="bg-sd-muted/40 rounded-lg p-3 border border-sd-line/40">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] text-gray-500 uppercase tracking-wider">Trade Structure</span>
                     <span className="text-[10px] text-yellow-400 font-mono">SPX · {today} · 0DTE</span>
@@ -1107,7 +1107,7 @@ function StrategyAccordionRow({
                     const putCredit = Math.max(0, (suggestion.shortPutPremium ?? 0) - (suggestion.longPutPremium ?? 0));
                     return (
                       <div className="mb-1">
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-slate-700/50">
+                        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-sd-line/50">
                           <span className="font-semibold">Put Credit Spread</span>
                           <span className="text-green-400 font-mono">+${putCredit.toFixed(2)} credit</span>
                         </div>
@@ -1123,8 +1123,8 @@ function StrategyAccordionRow({
                   {hasCall && (() => {
                     const callCredit = Math.max(0, (suggestion.shortCallPremium ?? 0) - (suggestion.longCallPremium ?? 0));
                     return (
-                      <div className={hasPut ? 'mt-2 pt-2 border-t border-gray-700/30' : ''}>
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-slate-700/50">
+                      <div className={hasPut ? 'mt-2 pt-2 border-t border-sd-line/40' : ''}>
+                        <div className="flex items-center justify-between text-[10px] text-gray-500 uppercase tracking-wider mb-0.5 pb-0.5 border-b border-sd-line/50">
                           <span className="font-semibold">Call Credit Spread</span>
                           <span className="text-green-400 font-mono">+${callCredit.toFixed(2)} credit</span>
                         </div>
@@ -1137,7 +1137,7 @@ function StrategyAccordionRow({
                   })()}
 
                   {/* Net summary */}
-                  <div className="mt-2 pt-2 border-t border-gray-700/40 grid grid-cols-3 gap-2 text-xs">
+                  <div className="mt-2 pt-2 border-t border-sd-line/40 grid grid-cols-3 gap-2 text-xs">
                     <div className="text-center">
                       <div className="text-gray-600 mb-0.5">Net Credit</div>
                       <div className="text-white font-mono font-semibold">${credit.toFixed(2)}</div>
@@ -1153,7 +1153,7 @@ function StrategyAccordionRow({
                   </div>
 
                   {/* Expected Move Range */}
-                  <div className="mt-3 pt-2 border-t border-gray-700/40">
+                  <div className="mt-3 pt-2 border-t border-sd-line/40">
                     <div className="text-[10px] text-gray-500 mb-1.5">1σ Expected Move Range</div>
                     <div className="flex items-center gap-2">
                       <div className="bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-xs text-green-400 font-mono flex-1 text-center">
@@ -1196,25 +1196,25 @@ function StrategyAccordionRow({
           })()}
 
           {/* [B] Entry Parameters */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen size={14} className="text-blue-400" />
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Parameters</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Entry Parameters</h3>
             </div>
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left py-1.5 px-2 text-slate-400 font-medium w-1/3">Parameter</th>
-                  <th className="text-left py-1.5 px-2 text-slate-400 font-medium">Value</th>
+                <tr className="border-b border-sd-line">
+                  <th className="text-left py-1.5 px-2 text-gray-400 font-medium w-1/3">Parameter</th>
+                  <th className="text-left py-1.5 px-2 text-gray-400 font-medium">Value</th>
                 </tr>
               </thead>
               <tbody>
                 {strategy.params.map((p, i) => (
-                  <tr key={i} className="border-b border-slate-800/50">
-                    <td className="py-2 px-2 text-slate-400">{p.parameter}</td>
+                  <tr key={i} className="border-b border-sd-line/50">
+                    <td className="py-2 px-2 text-gray-400">{p.parameter}</td>
                     <td className="py-2 px-2">
-                      <span className="text-slate-200">{p.value}</span>
-                      {p.notes && <span className="text-slate-500 ml-2 text-xs">({p.notes})</span>}
+                      <span className="text-gray-200">{p.value}</span>
+                      {p.notes && <span className="text-gray-500 ml-2 text-xs">({p.notes})</span>}
                     </td>
                   </tr>
                 ))}
@@ -1223,13 +1223,13 @@ function StrategyAccordionRow({
           </div>
 
           {/* [C] Entry Checklist — auto-evaluated */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <ClipboardList size={14} className="text-blue-400" />
-                <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Entry Checklist</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Entry Checklist</h3>
               </div>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-gray-500">
                 {autoPass + manualDone}/{strategy.checklist.length} confirmed
                 {autoFail > 0 && <span className="text-red-400 ml-1">· {autoFail} failed</span>}
               </span>
@@ -1255,7 +1255,7 @@ function StrategyAccordionRow({
                       <CheckCircle2 size={16} className="text-green-400 shrink-0 mt-0.5" />
                     )}
                     {isManual && !manualVal && (
-                      <Circle size={16} className="text-slate-600 shrink-0 mt-0.5 group-hover:text-slate-400" />
+                      <Circle size={16} className="text-gray-600 shrink-0 mt-0.5 group-hover:text-gray-400" />
                     )}
 
                     {/* Label + auto badge */}
@@ -1263,8 +1263,8 @@ function StrategyAccordionRow({
                       <span className={`text-xs leading-relaxed ${
                         !isManual && autoResult === true  ? 'text-green-400' :
                         !isManual && autoResult === false ? 'text-red-400'   :
-                        isManual  && manualVal           ? 'text-slate-400 line-through' :
-                                                           'text-slate-300'
+                        isManual  && manualVal           ? 'text-gray-400 line-through' :
+                                                           'text-gray-300'
                       }`}>
                         {item.text}
                       </span>
@@ -1299,14 +1299,14 @@ function StrategyAccordionRow({
           </div>
 
           {/* [D] Risk Management */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={14} className="text-orange-400" />
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Risk Management</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Risk Management</h3>
             </div>
             <ul className="space-y-2">
               {strategy.risk.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-slate-400">
+                <li key={i} className="flex items-start gap-2 text-xs text-gray-400">
                   <span className="text-orange-500 mt-0.5 shrink-0">›</span>
                   {r}
                 </li>
@@ -1315,18 +1315,18 @@ function StrategyAccordionRow({
           </div>
 
           {/* [E] Quick Setup */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <Send size={14} className="text-blue-400" />
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-300">Quick Setup</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Quick Setup</h3>
             </div>
             <ol className="space-y-2">
               {strategy.setup.map(s => (
                 <li key={s.step} className="flex items-start gap-3 text-xs">
-                  <span className="w-5 h-5 rounded-full bg-blue-900/60 border border-blue-700 flex items-center justify-center text-blue-300 font-bold shrink-0 text-[10px]">
+                  <span className="w-5 h-5 rounded-full bg-sd-accent-soft border border-sd-accent-soft flex items-center justify-center text-sd-accent font-bold shrink-0 text-[10px]">
                     {s.step}
                   </span>
-                  <span className="text-slate-300 leading-relaxed pt-0.5">{s.text}</span>
+                  <span className="text-gray-300 leading-relaxed pt-0.5">{s.text}</span>
                 </li>
               ))}
             </ol>
@@ -1336,7 +1336,7 @@ function StrategyAccordionRow({
           {!showLogger ? (
             <button
               onClick={() => setShowLogger(true)}
-              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-600 text-slate-300 hover:text-white text-sm font-medium py-3 rounded-xl transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-sd-muted hover:bg-sd-subtle border border-sd-line hover:border-blue-600 text-gray-300 hover:text-white text-sm font-medium py-3 rounded-xl transition-all"
             >
               <ClipboardList size={15} />
               Log This Trade → {strategy.name}
@@ -1433,8 +1433,8 @@ export function ZeroDTELibrary() {
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-bold text-slate-100">7 Strategies</h3>
-          <span className="text-xs text-slate-500">— click any row to expand details</span>
+          <h3 className="text-sm font-bold text-gray-200">7 Strategies</h3>
+          <span className="text-[11px] text-gray-500">— click any row to expand details</span>
         </div>
         <button
           onClick={() => setShowComparison(s => !s)}
@@ -1447,7 +1447,7 @@ export function ZeroDTELibrary() {
 
       {showComparison && <StrategyComparisonTable strategies={STRATEGIES} />}
 
-      <div className="divide-y divide-slate-800 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="divide-y divide-sd-line border border-sd-line rounded-xl overflow-hidden">
         {STRATEGIES.map((strategy, idx) => (
           <StrategyAccordionRow
             key={strategy.id}

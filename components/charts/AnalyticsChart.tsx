@@ -44,11 +44,11 @@ export function AnalyticsChart({ data }: { data: AnalyticsData }) {
         <CardContent>
           <ResponsiveContainer width="100%" height={150}>
             <BarChart data={data.monthlyPnl} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 15%)" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(215 15% 55%)' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: 'hsl(215 15% 55%)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
               <Tooltip
-                contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '6px', fontSize: 11 }}
+                contentStyle={{ backgroundColor: 'hsl(220 20% 8%)', border: '1px solid hsl(220 15% 20%)', borderRadius: '6px', fontSize: 11 }}
                 formatter={(v: number) => [`$${v.toFixed(0)}`, 'P&L']}
               />
               <Bar dataKey="pnl" radius={[3, 3, 0, 0]}

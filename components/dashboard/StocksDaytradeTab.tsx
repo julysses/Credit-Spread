@@ -36,7 +36,7 @@ const REGIME_CONFIG: Record<IntradayRegime, {
   BREAKOUT_EXPANSION: { bg: 'bg-blue-500/15',    border: 'border-blue-500/40',    text: 'text-blue-400',    label: 'BREAKOUT EXPANSION', icon: <BarChart3 size={18} className="text-blue-400" /> },
   MEAN_REVERTING:     { bg: 'bg-purple-500/15',  border: 'border-purple-500/40',  text: 'text-purple-400',  label: 'MEAN REVERTING',     icon: <Minus size={18} className="text-purple-400" /> },
   HIGH_VOL_UNSTABLE:  { bg: 'bg-orange-500/15',  border: 'border-orange-500/40',  text: 'text-orange-400',  label: 'HIGH VOL / UNSTABLE',icon: <AlertTriangle size={18} className="text-orange-400" /> },
-  NO_TRADE:           { bg: 'bg-gray-800/60',    border: 'border-gray-700/40',    text: 'text-gray-500',    label: 'NO TRADE',           icon: <AlertTriangle size={18} className="text-gray-600" /> },
+  NO_TRADE:           { bg: 'bg-sd-muted/60',    border: 'border-sd-line/40',     text: 'text-gray-500',    label: 'NO TRADE',           icon: <AlertTriangle size={18} className="text-gray-600" /> },
 };
 
 const TOTAL_BATCHES = 6;
@@ -136,23 +136,23 @@ export function StocksDaytradeTab({ spxHigh, spxLow }: StocksDaytradeTabProps) {
           </p>
         </div>
         {/* Sub-navigation */}
-        <div className="flex rounded-lg border border-gray-700 overflow-hidden text-xs font-semibold">
+        <div className="flex rounded-lg border border-sd-line overflow-hidden text-xs font-semibold">
           <button
             onClick={() => setActiveSubTab('daytrade')}
             className={`px-4 py-2 flex items-center gap-1.5 transition-colors ${
               activeSubTab === 'daytrade'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-900 text-gray-400 hover:text-white'
+                : 'bg-sd-card text-gray-400 hover:text-white'
             }`}
           >
             <BarChart3 size={12} /> Day Trade
           </button>
           <button
             onClick={() => setActiveSubTab('swing')}
-            className={`px-4 py-2 flex items-center gap-1.5 border-l border-gray-700 transition-colors ${
+            className={`px-4 py-2 flex items-center gap-1.5 border-l border-sd-line transition-colors ${
               activeSubTab === 'swing'
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-900 text-gray-400 hover:text-white'
+                : 'bg-sd-card text-gray-400 hover:text-white'
             }`}
           >
             <Moon size={12} /> Swing Watchlist
@@ -239,7 +239,7 @@ export function StocksDaytradeTab({ spxHigh, spxLow }: StocksDaytradeTabProps) {
             </div>
           )}
           {spxHigh && spxLow && (
-            <div className="mt-2 pt-2 border-t border-gray-700/40 flex items-center gap-3 text-xs font-mono text-gray-400">
+            <div className="mt-2 pt-2 border-t border-sd-line/40 flex items-center gap-3 text-xs font-mono text-gray-400">
               <span>SPX Day Range:</span>
               <span className="text-emerald-400">H {spxHigh.toFixed(0)}</span>
               <span className="text-gray-600">/</span>
@@ -253,12 +253,12 @@ export function StocksDaytradeTab({ spxHigh, spxLow }: StocksDaytradeTabProps) {
 
       {/* ── Scan Progress ─────────────────────────────────────────────────── */}
       {scanLoading && (
-        <div className="rounded-lg bg-gray-900/60 border border-gray-800 px-4 py-3">
+        <div className="rounded-lg bg-sd-muted/40 border border-sd-line px-4 py-3">
           <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
             <span>Scanning batch {scanProgress.current} of {scanProgress.total}…</span>
             <span>{Math.round((scanProgress.current / scanProgress.total) * 100)}%</span>
           </div>
-          <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-sd-muted rounded-full overflow-hidden">
             <div
               className="h-full bg-blue-500 rounded-full transition-all duration-300"
               style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }}
@@ -291,17 +291,17 @@ export function StocksDaytradeTab({ spxHigh, spxLow }: StocksDaytradeTabProps) {
       </div>
 
       {/* ── Universe Accordion ────────────────────────────────────────────── */}
-      <div className="border border-gray-800 rounded-xl overflow-hidden">
+      <div className="border border-sd-line rounded-xl overflow-hidden">
         <button
           onClick={() => setShowUniverse(o => !o)}
-          className="w-full flex items-center gap-2 px-4 py-3 bg-gray-900/60 hover:bg-gray-800/60 transition-colors text-left"
+          className="w-full flex items-center gap-2 px-4 py-3 bg-sd-card hover:bg-sd-muted/60 transition-colors text-left"
         >
           {showUniverse ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
           <span className="text-xs font-semibold text-gray-400">Universe Reference</span>
           <span className="ml-1 text-xs text-gray-600">31 ETFs · 30 Stocks</span>
         </button>
         {showUniverse && (
-          <div className="p-4 border-t border-gray-800 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-950/40">
+          <div className="p-4 border-t border-sd-line grid grid-cols-1 md:grid-cols-2 gap-4 bg-sd-card/60">
             <div>
               <p className="text-[10px] uppercase tracking-widest text-purple-400 font-bold mb-2">ETFs + Indices</p>
               <div className="flex flex-wrap gap-1.5">

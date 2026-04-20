@@ -65,17 +65,17 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
   const cat = CATEGORY_COLORS[strategy.category];
 
   return (
-    <div className={`border border-gray-800 border-l-2 ${cat.accent} rounded-xl bg-gray-900/40 overflow-hidden`}>
+    <div className={`border border-sd-line border-l-2 ${cat.accent} rounded-xl bg-sd-card/60 overflow-hidden`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-800/30 transition-colors"
+        className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-sd-muted/30 transition-colors"
       >
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className={`text-xs px-2 py-0.5 rounded border font-medium ${cat.badge}`}>
               {cat.label}
             </span>
-            <span className="text-xs text-gray-500 bg-gray-800/60 px-2 py-0.5 rounded border border-gray-700">
+            <span className="text-xs text-gray-500 bg-sd-muted/60 px-2 py-0.5 rounded border border-sd-line">
               {strategy.structure}
             </span>
             <span className="text-xs text-gray-600">{strategy.dteSuggested}</span>
@@ -91,7 +91,7 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
       </button>
 
       {open && (
-        <div className="px-4 pb-4 border-t border-gray-800/60 pt-3 space-y-3">
+        <div className="px-4 pb-4 border-t border-sd-line/60 pt-3 space-y-3">
           <div>
             <p className="text-xs text-gray-500 mb-1 font-semibold uppercase tracking-wide">Delta Target</p>
             <p className="text-xs text-gray-300">{strategy.deltaTarget}</p>
@@ -120,7 +120,7 @@ function StrategyCard({ strategy }: { strategy: OptionsStrategy }) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {strategy.idealRegimes.map(r => (
-              <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 border border-gray-700">
+              <span key={r} className="text-[10px] px-1.5 py-0.5 rounded bg-sd-muted text-gray-400 border border-sd-line">
                 {r.replace(/_/g, ' ')}
               </span>
             ))}
@@ -204,7 +204,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             {/* 1σ band */}
-            <div className="bg-gray-900/60 rounded-lg p-2.5 border border-gray-700/40">
+            <div className="bg-sd-muted/60 rounded-lg p-2.5 border border-sd-line/40">
               <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">1σ Range · 68% probability</div>
               <div className="flex items-center justify-between font-mono">
                 <span className="text-red-400 text-sm font-bold">{em1Low.toFixed(0)}</span>
@@ -214,7 +214,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
               <div className="text-[10px] text-gray-600 mt-1 text-center">{(em1 * 2).toFixed(0)} pt width</div>
             </div>
             {/* 2σ band */}
-            <div className="bg-gray-900/60 rounded-lg p-2.5 border border-gray-700/40">
+            <div className="bg-sd-muted/60 rounded-lg p-2.5 border border-sd-line/40">
               <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">2σ Range · 95% probability</div>
               <div className="flex items-center justify-between font-mono">
                 <span className="text-red-300/70 text-sm font-bold">{em2Low.toFixed(0)}</span>
@@ -273,7 +273,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
         {plansLoading ? (
           <div className="space-y-2">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-16 bg-gray-800/40 rounded-xl animate-pulse" />
+              <div key={i} className="h-16 bg-sd-muted/40 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : tradePlans && tradePlans.plans.length > 0 ? (
@@ -283,7 +283,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
             ))}
           </div>
         ) : (
-          <div className="border border-gray-800 rounded-xl p-4 text-center text-gray-500 text-sm">
+          <div className="border border-sd-line rounded-xl p-4 text-center text-gray-500 text-sm">
             No trade plans available. Market may be closed or data unavailable.
           </div>
         )}
@@ -302,7 +302,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-20 bg-gray-800/40 rounded-xl animate-pulse" />
+              <div key={i} className="h-20 bg-sd-muted/40 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : dayTradeActive.length > 0 ? (
@@ -310,7 +310,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
             {dayTradeActive.map(s => <StrategyCard key={s.id} strategy={s} />)}
           </div>
         ) : (
-          <div className="border border-gray-800 rounded-xl p-4 text-center text-gray-500 text-sm">
+          <div className="border border-sd-line rounded-xl p-4 text-center text-gray-500 text-sm">
             No day trade strategies active in current regime.
             {data?.regime === 'CRISIS' && ' Crisis mode — capital preservation only.'}
           </div>
@@ -330,7 +330,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 bg-gray-800/40 rounded-xl animate-pulse" />
+              <div key={i} className="h-20 bg-sd-muted/40 rounded-xl animate-pulse" />
             ))}
           </div>
         ) : swingActive.length > 0 ? (
@@ -338,26 +338,26 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
             {swingActive.map(s => <StrategyCard key={s.id} strategy={s} />)}
           </div>
         ) : (
-          <div className="border border-gray-800 rounded-xl p-4 text-center text-gray-500 text-sm">
+          <div className="border border-sd-line rounded-xl p-4 text-center text-gray-500 text-sm">
             No swing strategies active in current regime.
           </div>
         )}
       </div>
 
       {/* ── Regime × Strategy Matrix (collapsible) ───────────────────────────── */}
-      <div className="border-2 border-slate-700 rounded-xl overflow-hidden">
+      <div className="border border-sd-line2 rounded-xl overflow-hidden">
         <button
           onClick={() => setShowMatrix(o => !o)}
-          className="w-full flex items-center gap-3 px-5 py-4 bg-slate-900/80 hover:bg-slate-800/80 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-5 py-4 bg-sd-card hover:bg-sd-muted/60 transition-colors text-left"
         >
           {showMatrix
-            ? <ChevronDown size={16} className="text-slate-400 shrink-0" />
-            : <ChevronRight size={16} className="text-slate-400 shrink-0" />}
-          <span className="text-sm font-semibold text-slate-200">Regime Matrix &amp; Structure Decision Guide</span>
-          <span className="ml-auto text-xs text-slate-500">16 strategies · IVR-based structure logic</span>
+            ? <ChevronDown size={16} className="text-gray-400 shrink-0" />
+            : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
+          <span className="text-sm font-semibold text-gray-200">Regime Matrix &amp; Structure Decision Guide</span>
+          <span className="ml-auto text-xs text-gray-500">16 strategies · IVR-based structure logic</span>
         </button>
         {showMatrix && data && (
-          <div className="p-5 border-t border-slate-700 bg-slate-950/40">
+          <div className="p-5 border-t border-sd-line bg-sd-card/60">
             <OptionsRegimeMatrix
               regime={data.regime}
               compositeScore={data.compositeScore}
@@ -370,33 +370,33 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
       </div>
 
       {/* ── 0DTE Library (collapsible) ───────────────────────────────────────── */}
-      <div className="border-2 border-slate-700 rounded-xl overflow-hidden">
+      <div className="border border-sd-line2 rounded-xl overflow-hidden">
         <button
           onClick={() => setShowZeroDTE(o => !o)}
-          className="w-full flex items-center gap-3 px-5 py-4 bg-slate-900/80 hover:bg-slate-800/80 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-5 py-4 bg-sd-card hover:bg-sd-muted/60 transition-colors text-left"
         >
           {showZeroDTE
-            ? <ChevronDown size={16} className="text-slate-400 shrink-0" />
-            : <ChevronRight size={16} className="text-slate-400 shrink-0" />}
+            ? <ChevronDown size={16} className="text-gray-400 shrink-0" />
+            : <ChevronRight size={16} className="text-gray-400 shrink-0" />}
           <Zap size={15} className="text-yellow-400" />
-          <span className="text-sm font-semibold text-slate-200">0DTE Strategy Library</span>
-          <span className="ml-auto flex rounded-lg border border-slate-700 overflow-hidden text-xs">
+          <span className="text-sm font-semibold text-gray-200">0DTE Strategy Library</span>
+          <span className="ml-auto flex rounded-lg border border-sd-line overflow-hidden text-xs">
             <button
               onClick={e => { e.stopPropagation(); setShowPerf(false); if (!showZeroDTE) setShowZeroDTE(true); }}
-              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${!showPerf ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${!showPerf ? 'bg-blue-600 text-white' : 'bg-sd-card text-gray-400 hover:text-white'}`}
             >
               <BookOpen size={11} /> Library
             </button>
             <button
               onClick={e => { e.stopPropagation(); setShowPerf(true); if (!showZeroDTE) setShowZeroDTE(true); }}
-              className={`px-3 py-1.5 flex items-center gap-1.5 border-l border-slate-700 transition-colors ${showPerf ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+              className={`px-3 py-1.5 flex items-center gap-1.5 border-l border-sd-line transition-colors ${showPerf ? 'bg-blue-600 text-white' : 'bg-sd-card text-gray-400 hover:text-white'}`}
             >
               <BarChart3 size={11} /> Performance
             </button>
           </span>
         </button>
         {showZeroDTE && (
-          <div className="p-5 border-t border-slate-700 bg-slate-950/40">
+          <div className="p-5 border-t border-sd-line bg-sd-card/60">
             {showPerf ? <ZeroDTEPerformance /> : <ZeroDTELibrary />}
           </div>
         )}

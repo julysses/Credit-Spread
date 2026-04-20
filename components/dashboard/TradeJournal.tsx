@@ -51,19 +51,19 @@ export function TradeJournal({ trades, summary }: TradeJournalProps) {
 
         {/* Summary Strip */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="bg-gray-800/40 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-500">Win Rate</div>
-            <div className="text-lg font-bold text-green-400">{(summary.winRate * 100).toFixed(0)}%</div>
+          <div className="bg-sd-muted/50 border border-sd-line/60 rounded-lg p-2 text-center">
+            <div className="text-[10px] text-gray-500 uppercase tracking-[0.12em]">Win Rate</div>
+            <div className="slab text-lg text-green-400">{(summary.winRate * 100).toFixed(0)}%</div>
           </div>
-          <div className="bg-gray-800/40 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-500">Total P&L</div>
-            <div className={`text-lg font-bold font-mono ${summary.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <div className="bg-sd-muted/50 border border-sd-line/60 rounded-lg p-2 text-center">
+            <div className="text-[10px] text-gray-500 uppercase tracking-[0.12em]">Total P&L</div>
+            <div className={`slab text-lg ${summary.totalPnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               ${summary.totalPnl.toFixed(0)}
             </div>
           </div>
-          <div className="bg-gray-800/40 rounded-lg p-2 text-center">
-            <div className="text-xs text-gray-500">Exposure</div>
-            <div className="text-lg font-bold text-blue-400">${summary.openExposure.toFixed(0)}</div>
+          <div className="bg-sd-muted/50 border border-sd-line/60 rounded-lg p-2 text-center">
+            <div className="text-[10px] text-gray-500 uppercase tracking-[0.12em]">Exposure</div>
+            <div className="slab text-lg text-blue-400">${summary.openExposure.toFixed(0)}</div>
           </div>
         </div>
 
@@ -91,7 +91,7 @@ function TradeRow({ trade }: { trade: Trade }) {
     : `${trade.shortStrike}/${trade.longStrike}`;
 
   return (
-    <div className="flex items-center justify-between py-2 px-3 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition-colors">
+    <div className="flex items-center justify-between py-2 px-3 bg-sd-muted/30 rounded-lg hover:bg-sd-muted/50 transition-colors">
       <div className="flex items-center gap-3">
         <Badge variant={isOpen ? 'info' : (trade.pnl || 0) >= 0 ? 'success' : 'danger'}>
           {isOpen ? 'OPEN' : (trade.pnl || 0) >= 0 ? 'WIN' : 'LOSS'}

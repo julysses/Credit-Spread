@@ -295,7 +295,7 @@ function FlowBar({ score }: { score: number }) {
   const colors = ['#ef4444', '#f97316', '#eab308'];
   return (
     <div className="flex flex-col items-center gap-2">
-      <span className="text-xs text-slate-400 uppercase tracking-widest">Flow Score</span>
+      <span className="text-xs text-gray-400 uppercase tracking-widest">Flow Score</span>
       <div className="flex gap-2">
         {[0, 1, 2].map((i) => (
           <div
@@ -327,10 +327,10 @@ function SignalRow({
   unit?: string;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-slate-800">
+    <div className="flex items-center justify-between py-2 border-b border-sd-line">
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-200 truncate">{name}</p>
-        <p className="text-xs text-slate-500">
+        <p className="text-sm text-gray-200 truncate">{name}</p>
+        <p className="text-xs text-gray-500">
           {value}
           {unit} · {threshold}
         </p>
@@ -364,7 +364,7 @@ function InputField({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label className="text-xs text-slate-400 flex items-center gap-1">
+      <label className="text-xs text-gray-400 flex items-center gap-1">
         {label}
         {unit ? ` (${unit})` : ''}
         {autoFetched && (
@@ -379,7 +379,7 @@ function InputField({
         step={step ?? 0.01}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 w-full"
+        className="bg-sd-muted border border-sd-line rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-sd-accent w-full"
       />
     </div>
   );
@@ -396,7 +396,7 @@ function AIPanel({
 }) {
   const lines = recommendation.split('\n');
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
+    <div className="bg-sd-card border border-sd-line rounded-lg p-4">
       <div className="prose prose-invert prose-sm max-w-none">
         {lines.map((line, i) => {
           const isHeader = /^#{1,3}\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line);
@@ -410,7 +410,7 @@ function AIPanel({
             );
           }
           return (
-            <p key={i} className="text-slate-300 text-sm leading-relaxed">
+            <p key={i} className="text-gray-300 text-sm leading-relaxed">
               {line}
             </p>
           );
@@ -436,11 +436,11 @@ function HistoryTable({
   onRowClick: (row: SignalSnapshot) => void;
 }) {
   if (!rows.length) {
-    return <p className="text-slate-500 text-sm text-center py-6">No snapshots yet.</p>;
+    return <p className="text-gray-500 text-sm text-center py-6">No snapshots yet.</p>;
   }
 
   function tierColor(tier: string) {
-    if (tier.includes('BLACK')) return 'text-slate-400';
+    if (tier.includes('BLACK')) return 'text-gray-400';
     if (tier.includes('RED')) return 'text-red-400';
     if (tier.includes('ORANGE')) return 'text-orange-400';
     if (tier.includes('YELLOW')) return 'text-yellow-400';
@@ -451,12 +451,12 @@ function HistoryTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-800">
-            <th className="text-left py-2 px-3 text-slate-400 font-medium">Date</th>
-            <th className="text-center py-2 px-3 text-slate-400 font-medium">Macro</th>
-            <th className="text-center py-2 px-3 text-slate-400 font-medium">Flow</th>
-            <th className="text-left py-2 px-3 text-slate-400 font-medium">Composite</th>
-            <th className="text-left py-2 px-3 text-slate-400 font-medium">AI Preview</th>
+          <tr className="border-b border-sd-line">
+            <th className="text-left py-2 px-3 text-gray-400 font-medium">Date</th>
+            <th className="text-center py-2 px-3 text-gray-400 font-medium">Macro</th>
+            <th className="text-center py-2 px-3 text-gray-400 font-medium">Flow</th>
+            <th className="text-left py-2 px-3 text-gray-400 font-medium">Composite</th>
+            <th className="text-left py-2 px-3 text-gray-400 font-medium">AI Preview</th>
           </tr>
         </thead>
         <tbody>
@@ -464,9 +464,9 @@ function HistoryTable({
             <tr
               key={row.id}
               onClick={() => onRowClick(row)}
-              className="border-b border-slate-800/50 hover:bg-slate-800/40 cursor-pointer transition-colors"
+              className="border-b border-sd-line/50 hover:bg-sd-muted/40 cursor-pointer transition-colors"
             >
-              <td className="py-2 px-3 text-slate-300">
+              <td className="py-2 px-3 text-gray-300">
                 {new Date(row.created_at).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',
@@ -479,7 +479,7 @@ function HistoryTable({
               <td className={`py-2 px-3 font-medium ${tierColor(row.composite_signal)}`}>
                 {row.composite_signal}
               </td>
-              <td className="py-2 px-3 text-slate-400 truncate max-w-[200px]">
+              <td className="py-2 px-3 text-gray-400 truncate max-w-[200px]">
                 {row.ai_recommendation ? row.ai_recommendation.slice(0, 60) + '…' : '—'}
               </td>
             </tr>
@@ -497,7 +497,7 @@ type ChartPoint = {
 
 function ScoreHistoryChart({ data }: { data: ChartPoint[] }) {
   if (!data.length) {
-    return <p className="text-slate-500 text-sm text-center py-6">No history to chart.</p>;
+    return <p className="text-gray-500 text-sm text-center py-6">No history to chart.</p>;
   }
 
   function dotColor(score: number) {
@@ -601,9 +601,9 @@ const TIER_CONFIG: Record<string, TierConfig> = {
   },
   'BLACK — Crisis Mode': {
     color: 'gray',
-    bgClass: 'bg-slate-900',
-    borderClass: 'border-slate-600',
-    textClass: 'text-slate-200',
+    bgClass: 'bg-sd-card',
+    borderClass: 'border-sd-line',
+    textClass: 'text-gray-200',
     action:
       'Rotate to cash + maximum hedge posture. Buy wide puts, VIX calls, consider inverse ETF allocation.',
     details: [
@@ -691,8 +691,8 @@ function ZeroDTERegimeWidget({
     verdict = {
       label: 'VERIFY REGIME',
       recommend: 'Mixed signals — check GEX and VIX1D before entering any 0DTE',
-      cls: 'bg-slate-800 border-slate-600 text-slate-300',
-      dot: 'bg-slate-400',
+      cls: 'bg-sd-muted border-sd-line text-gray-300',
+      dot: 'bg-gray-400',
     };
   }
 
@@ -724,21 +724,21 @@ function ZeroDTERegimeWidget({
   ];
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
+    <div className="bg-sd-card border border-sd-line rounded-xl p-4 mb-4">
       <div className="flex items-center gap-2 mb-3">
         <Zap size={15} className="text-yellow-400" />
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">0DTE Regime Status</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">0DTE Regime Status</h2>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {cells.map(cell => (
-          <div key={cell.label} className="bg-slate-800/60 rounded-lg p-3">
+          <div key={cell.label} className="bg-sd-muted/60 rounded-lg p-3">
             <div className="flex items-center gap-1.5 mb-1.5">
               <span className={`w-2 h-2 rounded-full shrink-0 ${cell.dot}`} />
-              <span className="text-xs text-slate-400 font-medium">{cell.label}</span>
+              <span className="text-xs text-gray-400 font-medium">{cell.label}</span>
             </div>
             <div className="text-sm font-semibold text-white">{cell.value}</div>
-            <div className="text-xs text-slate-500 mt-0.5 truncate">{cell.note}</div>
+            <div className="text-xs text-gray-500 mt-0.5 truncate">{cell.note}</div>
           </div>
         ))}
       </div>
@@ -980,9 +980,9 @@ export function SignalStackEngine() {
               <Activity size={22} className="text-blue-400" />
               <h1 className="text-2xl font-bold tracking-tight">SPX Signal Stack Engine</h1>
             </div>
-            <p className="text-slate-400 text-sm">Macro Directional Intelligence</p>
+            <p className="text-gray-400 text-sm">Macro Directional Intelligence</p>
           </div>
-          <div className="flex items-center gap-2 text-slate-400 text-xs bg-slate-900 border border-slate-800 rounded px-3 py-1.5">
+          <div className="flex items-center gap-2 text-gray-400 text-xs bg-sd-card border border-sd-line rounded px-3 py-1.5">
             <Clock size={13} />
             {timestamp}
           </div>
@@ -992,15 +992,15 @@ export function SignalStackEngine() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
           {/* LEFT: Input Panel */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp size={16} className="text-blue-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Market Inputs</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Market Inputs</h2>
               <button
                 onClick={fetchMarketInputs}
                 disabled={autoFetching}
                 title="Refresh live market data"
-                className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                className="ml-auto flex items-center gap-1.5 text-xs text-gray-400 hover:text-white bg-sd-muted hover:bg-sd-subtle border border-sd-line px-2 py-1 rounded transition-colors disabled:opacity-50"
               >
                 <RefreshCw size={11} className={autoFetching ? 'animate-spin' : ''} />
                 {autoFetching ? 'Fetching…' : 'Refresh'}
@@ -1020,7 +1020,7 @@ export function SignalStackEngine() {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
                   Live data — {lastAutoFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <span className="text-slate-500">{autoFetchedFields.size}/14 auto-filled</span>
+                <span className="text-gray-500">{autoFetchedFields.size}/14 auto-filled</span>
               </div>
             )}
             {autoFetchError && (
@@ -1057,10 +1057,10 @@ export function SignalStackEngine() {
           </div>
 
           {/* CENTER: Score Dashboard */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 flex flex-col items-center gap-5">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4 flex flex-col items-center gap-5">
             <div className="flex items-center gap-2">
               <Activity size={16} className="text-blue-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Score Dashboard</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Score Dashboard</h2>
             </div>
 
             <MacroGauge score={scores.macroScore} />
@@ -1085,7 +1085,7 @@ export function SignalStackEngine() {
             <div
               className={`w-full text-center rounded-xl border-2 py-4 px-3 ${tierConfig.bgClass} ${tierConfig.borderClass}`}
             >
-              <p className="text-xs text-slate-400 uppercase tracking-widest mb-1">Composite Signal</p>
+              <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">Composite Signal</p>
               <p className={`text-xl font-extrabold tracking-tight ${tierConfig.textClass}`}>
                 {scores.compositeTier}
               </p>
@@ -1093,16 +1093,16 @@ export function SignalStackEngine() {
           </div>
 
           {/* RIGHT: Active Signals */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+          <div className="bg-sd-card border border-sd-line rounded-xl p-4">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={16} className="text-blue-400" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Signal Monitor</h2>
-              <span className="ml-auto text-xs bg-slate-800 rounded-full px-2 py-0.5 text-slate-400">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Signal Monitor</h2>
+              <span className="ml-auto text-xs bg-sd-muted rounded-full px-2 py-0.5 text-gray-400">
                 {scores.firedSignals.length} fired
               </span>
             </div>
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-widest mb-1">Macro</p>
+              <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Macro</p>
               {scores.macroSignals.map((s) => (
                 <SignalRow
                   key={s.name}
@@ -1113,7 +1113,7 @@ export function SignalStackEngine() {
                   unit={s.unit}
                 />
               ))}
-              <p className="text-xs text-slate-500 uppercase tracking-widest mt-3 mb-1">Flow</p>
+              <p className="text-xs text-gray-500 uppercase tracking-widest mt-3 mb-1">Flow</p>
               {scores.flowSignals.map((s) => (
                 <SignalRow
                   key={s.name}
@@ -1147,7 +1147,7 @@ export function SignalStackEngine() {
           <p className="text-white font-semibold text-base mb-3">{tierConfig.action}</p>
           <ul className="space-y-1">
             {tierConfig.details.map((d, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
                 <span className={`mt-0.5 ${tierConfig.textClass}`}>›</span>
                 {d}
               </li>
@@ -1159,10 +1159,10 @@ export function SignalStackEngine() {
         </div>
 
         {/* AI PANEL */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 mb-4">
+        <div className="bg-sd-card border border-sd-line rounded-xl p-5 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Brain size={16} className="text-blue-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">AI Analysis</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">AI Analysis</h2>
           </div>
           <button
             onClick={handleAnalyze}
@@ -1174,7 +1174,7 @@ export function SignalStackEngine() {
           </button>
 
           {analyzing && (
-            <div className="flex items-center gap-3 text-slate-400 text-sm py-4">
+            <div className="flex items-center gap-3 text-gray-400 text-sm py-4">
               <RefreshCw size={16} className="animate-spin text-blue-400" />
               Running signal analysis through Claude…
             </div>
@@ -1184,13 +1184,13 @@ export function SignalStackEngine() {
             <>
               <AIPanel recommendation={aiRec} onSave={handleSaveToLog} saving={saving} />
               <div className="mt-4">
-                <label className="text-xs text-slate-400 mb-1 block">Trade Notes</label>
+                <label className="text-xs text-gray-400 mb-1 block">Trade Notes</label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add context, reasoning, or follow-up actions…"
                   rows={3}
-                  className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full bg-sd-muted border border-sd-line rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-sd-accent resize-none"
                 />
               </div>
             </>
@@ -1198,14 +1198,14 @@ export function SignalStackEngine() {
         </div>
 
         {/* HISTORY TABLE */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5 mb-4">
+        <div className="bg-sd-card border border-sd-line rounded-xl p-5 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={16} className="text-blue-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Snapshot History</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Snapshot History</h2>
             <button
               onClick={fetchHistory}
               disabled={historyLoading}
-              className="ml-auto text-slate-400 hover:text-white transition-colors"
+              className="ml-auto text-gray-400 hover:text-white transition-colors"
               title="Refresh history"
             >
               <RefreshCw size={14} className={historyLoading ? 'animate-spin' : ''} />
@@ -1224,10 +1224,10 @@ export function SignalStackEngine() {
         </div>
 
         {/* SCORE HISTORY CHART */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
+        <div className="bg-sd-card border border-sd-line rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 size={16} className="text-blue-400" />
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Macro Score History</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Macro Score History</h2>
           </div>
           <ScoreHistoryChart data={chartData} />
         </div>

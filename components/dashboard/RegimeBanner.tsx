@@ -19,6 +19,10 @@ interface RegimeBannerData {
   bearishSignals: number;
   ivr: number;
   fetchedAt: number;
+  inputs?: {
+    spxPrice?: number | null;
+    vixLevel?: number | null;
+  };
 }
 
 interface RegimeBannerProps {
@@ -219,6 +223,10 @@ export function RegimeBanner({ spxPrice, vix, spxHigh, spxLow }: RegimeBannerPro
     data.confidence === 'high'   ? 'success' :
     data.confidence === 'medium' ? 'warning' : 'outline';
 
+  // Use props if available, fall back to values from the regime API's own inputs
+  const effectiveSpxPrice = spxPrice ?? data.inputs?.spxPrice ?? undefined;
+  const effectiveVix      = vix      ?? data.inputs?.vixLevel  ?? undefined;
+
   return (
     <Card>
       <div className="px-5 py-3.5 border-b border-sd-line flex flex-wrap items-center gap-3">
@@ -236,9 +244,9 @@ export function RegimeBanner({ spxPrice, vix, spxHigh, spxLow }: RegimeBannerPro
 
       <div className="px-5 py-4 space-y-4">
         {/* Expected trading range — shown when spxPrice + vix are available */}
-        {spxPrice && vix && (
+        {effectiveSpxPrice && effectiveSpxPrice > 0 && effectiveVix && effectiveVix > 0 && (
           <div className="pb-3 border-b border-sd-line">
-            <ExpectedRangeBar spxPrice={spxPrice} vix={vix} spxHigh={spxHigh} spxLow={spxLow} />
+            <ExpectedRangeBar spxPrice={effectiveSpxPrice} vix={effectiveVix} spxHigh={spxHigh} spxLow={spxLow} />
           </div>
         )}
 
