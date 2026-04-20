@@ -2,7 +2,7 @@
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { getRiskBadgeClass } from '@/lib/utils';
+import { BarGauge } from '@/components/ui/bar-gauge';
 
 interface MarketRegimeCardProps {
   vix: number;
@@ -22,9 +22,39 @@ interface MarketRegimeCardProps {
   } | null;
 }
 
+function vixColorClass(v: number) {
+  if (v > 35) return 'text-red-500';
+  if (v > 25) return 'text-red-400';
+  if (v > 18) return 'text-orange-400';
+  if (v > 12) return 'text-yellow-400';
+  return 'text-green-400';
+}
+function vixBarClass(v: number) {
+  if (v > 35) return 'bg-red-500';
+  if (v > 25) return 'bg-red-400';
+  if (v > 18) return 'bg-orange-400';
+  if (v > 12) return 'bg-yellow-400';
+  return 'bg-green-400';
+}
+function vixLabelText(v: number) {
+  if (v > 35) return 'EXTREME';
+  if (v > 25) return 'ELEVATED';
+  if (v > 18) return 'NORMAL-HI';
+  return 'NORMAL';
+}
+function ivBarClass(r: number) {
+  if (r >= 70) return 'bg-green-400';
+  if (r >= 40) return 'bg-yellow-400';
+  return 'bg-red-400';
+}
+function ivTextClass(r: number) {
+  if (r >= 70) return 'text-green-400';
+  if (r >= 40) return 'text-yellow-400';
+  return 'text-red-400';
+}
+
 export function MarketRegimeCard({
   vix,
-  vixRegime,
   ivRank,
   impliedVol,
   realizedVol,
@@ -35,148 +65,137 @@ export function MarketRegimeCard({
   riskLevel,
   skew,
 }: MarketRegimeCardProps) {
-  const ivPremium = impliedVol > realizedVol;
+  const iv = impliedVol * 100;
+  const rv = realizedVol * 100;
+  const premium = iv - rv;
+
+  const regimeVariant =
+    riskLevel === 'low'  ? 'success' :
+    riskLevel === 'high' || riskLevel === 'extreme' ? 'danger' : 'info';
+
+  const biasNum =
+    directionalBias === 'bullish' ? 22 :
+    directionalBias === 'bearish' ? -22 : 0;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Market Regime</CardTitle>
-          <Badge className={getRiskBadgeClass(riskLevel)}>
-            {riskLevel.toUpperCase()} RISK
-          </Badge>
-        </div>
+        <CardTitle>Market Regime</CardTitle>
+        <Badge variant={regimeVariant as 'success' | 'danger' | 'info'}>
+          {marketRegime.replace(/_/g, ' ').toUpperCase()}
+        </Badge>
       </CardHeader>
-      <CardContent className="space-y-4">
 
-        {/* VIX Visual Gauge */}
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-xs text-gray-500">VIX Level</span>
-            <span className={`text-xs font-semibold capitalize ${
-              vixRegime === 'extreme' ? 'text-red-500' :
-              vixRegime === 'high' ? 'text-red-400' :
-              vixRegime === 'elevated' ? 'text-orange-400' :
-              vixRegime === 'moderate' ? 'text-yellow-400' : 'text-green-400'
-            }`}>{vixRegime}</span>
-          </div>
-          <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                vix > 35 ? 'bg-red-600' :
-                vix > 25 ? 'bg-red-400' :
-                vix > 18 ? 'bg-orange-400' :
-                vix > 12 ? 'bg-yellow-400' : 'bg-green-400'
-              }`}
-              style={{ width: `${Math.min((vix / 50) * 100, 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-600 mt-0.5">
-            <span>10</span><span>20</span><span>30</span><span>40</span><span>50+</span>
-          </div>
-        </div>
-
-        {/* IV Rank */}
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <span className="text-xs text-gray-500">IV Rank</span>
-            <span className={`text-xs font-semibold ${
-              ivRank >= 70 ? 'text-green-400' : ivRank >= 40 ? 'text-yellow-400' : 'text-red-400'
-            }`}>{ivRank.toFixed(0)}/100</span>
-          </div>
-          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${ivRank >= 70 ? 'bg-green-400' : ivRank >= 40 ? 'bg-yellow-400' : 'bg-red-400'}`}
-              style={{ width: `${ivRank}%` }}
-            />
-          </div>
-        </div>
-
-        {/* IV vs RV */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-800/50 rounded-lg p-3">
-            <div className="text-xs text-gray-500 mb-1">Impl. Vol</div>
-            <div className="text-lg font-bold font-mono text-white">{(impliedVol * 100).toFixed(1)}%</div>
-            <div className="text-xs text-gray-600">VIX/100</div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-3">
-            <div className="text-xs text-gray-500 mb-1">Realized Vol</div>
-            <div className="text-lg font-bold font-mono text-white">{(realizedVol * 100).toFixed(1)}%</div>
-            <div className="text-xs text-gray-600">20-day HV</div>
-          </div>
-        </div>
-
-        {/* IV Premium */}
-        <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-          ivPremium ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'
-        }`}>
-          <span className="text-xs text-gray-400">IV vs RV Premium</span>
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-bold font-mono ${ivPremium ? 'text-green-400' : 'text-red-400'}`}>
-              {ivPremium ? '+' : ''}{((impliedVol - realizedVol) * 100).toFixed(1)}%
+      <CardContent className="space-y-5">
+        {/* VIX gauge */}
+        <BarGauge
+          label="VIX"
+          value={vix}
+          min={8}
+          max={50}
+          stops={[12, 18, 25, 35]}
+          barClass={vixBarClass(vix)}
+          valueText={
+            <span className={vixColorClass(vix)}>
+              {vix.toFixed(2)} · {vixLabelText(vix)}
             </span>
-            <Badge variant={ivPremium ? 'success' : 'danger'}>
-              {ivPremium ? 'SELL FAVORABLE' : 'CAUTION'}
-            </Badge>
-          </div>
+          }
+        />
+
+        {/* IV Rank gauge */}
+        <BarGauge
+          label="IV Rank 52w"
+          value={ivRank}
+          min={0}
+          max={100}
+          stops={[40, 70]}
+          barClass={ivBarClass(ivRank)}
+          valueText={
+            <span className={ivTextClass(ivRank)}>{ivRank.toFixed(0)}%</span>
+          }
+        />
+
+        {/* IV / RV / Premium */}
+        <div className="grid grid-cols-3 gap-3 pt-3 border-t border-sd-line">
+          <Metric label="IV 30D" value={`${iv.toFixed(1)}%`} />
+          <Metric label="RV 30D" value={`${rv.toFixed(1)}%`} />
+          <Metric
+            label="IV − RV"
+            value={`${premium >= 0 ? '+' : ''}${premium.toFixed(1)}`}
+            valueClass={premium > 0 ? 'text-green-400' : 'text-red-400'}
+          />
         </div>
 
-        {/* Expected Moves */}
+        {/* Expected moves */}
+        <div className="grid grid-cols-2 gap-3">
+          <Metric label="EXP. MOVE · 7D"  value={`±${expectedMove7d.toFixed(0)}`}  boxed />
+          <Metric label="EXP. MOVE · 30D" value={`±${expectedMove30d.toFixed(0)}`} boxed />
+        </div>
+
+        {/* Directional bias bar */}
         <div>
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Expected Moves</div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-gray-800/40 rounded p-2 text-center">
-              <div className="text-xs text-gray-500">7 Days</div>
-              <div className="text-sm font-bold font-mono text-blue-400">±{expectedMove7d.toFixed(0)}</div>
-            </div>
-            <div className="bg-gray-800/40 rounded p-2 text-center">
-              <div className="text-xs text-gray-500">30 Days</div>
-              <div className="text-sm font-bold font-mono text-blue-400">±{expectedMove30d.toFixed(0)}</div>
-            </div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em]">Directional Bias</div>
+            <div className="slab text-sm text-gray-200 capitalize">{directionalBias}</div>
+          </div>
+          <div className="relative h-2 bg-sd-muted rounded-full overflow-hidden">
+            <div className="absolute top-0 bottom-0 left-1/2 w-px bg-sd-line2" />
+            <div
+              className={`absolute top-0 bottom-0 ${biasNum >= 0 ? 'bg-green-400' : 'bg-red-400'}`}
+              style={{
+                left: biasNum >= 0 ? '50%' : `${50 + biasNum / 2}%`,
+                width: `${Math.abs(biasNum) / 2}%`,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-gray-600 font-mono mt-1 uppercase tracking-wider">
+            <span>Bearish</span><span>Neutral</span><span>Bullish</span>
           </div>
         </div>
 
-        {/* Volatility Skew */}
+        {/* Skew */}
         {skew && (
-          <div>
-            <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Vol Skew</div>
+          <div className="pt-3 border-t border-sd-line">
+            <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em] mb-2">Vol Skew</div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-gray-800/40 rounded p-2 text-center">
-                <div className="text-xs text-gray-500">ATM IV</div>
-                <div className="text-sm font-bold font-mono text-white">{(skew.atm * 100).toFixed(1)}%</div>
-              </div>
-              <div className="bg-gray-800/40 rounded p-2 text-center">
-                <div className="text-xs text-gray-500">25d RR</div>
-                <div className={`text-sm font-bold font-mono ${skew.riskReversal25d > 0.02 ? 'text-red-400' : 'text-gray-300'}`}>
-                  {(skew.riskReversal25d * 100).toFixed(1)}%
-                </div>
-              </div>
-              <div className="bg-gray-800/40 rounded p-2 text-center">
-                <div className="text-xs text-gray-500">Skew</div>
-                <div className={`text-sm font-bold font-mono capitalize ${
-                  skew.regime === 'steep' ? 'text-red-400' :
-                  skew.regime === 'moderate' ? 'text-yellow-400' : 'text-green-400'
-                }`}>{skew.regime}</div>
-              </div>
+              <Metric label="ATM IV"  value={`${(skew.atm * 100).toFixed(1)}%`} boxed />
+              <Metric
+                label="25d RR"
+                value={`${(skew.riskReversal25d * 100).toFixed(1)}%`}
+                valueClass={skew.riskReversal25d > 0.02 ? 'text-red-400' : 'text-gray-200'}
+                boxed
+              />
+              <Metric
+                label="Skew"
+                value={skew.regime}
+                valueClass={skew.regime === 'steep' ? 'text-red-400' : skew.regime === 'moderate' ? 'text-yellow-400' : 'text-green-400'}
+                boxed
+              />
             </div>
           </div>
         )}
-
-        {/* Directional Bias + Market Regime */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-800/60">
-          <div>
-            <div className="text-xs text-gray-500">Bias</div>
-            <div className={`text-sm font-semibold capitalize ${
-              directionalBias === 'bullish' ? 'text-green-400' :
-              directionalBias === 'bearish' ? 'text-red-400' : 'text-gray-400'
-            }`}>{directionalBias}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500">Regime</div>
-            <div className="text-sm font-semibold text-gray-300 capitalize">{marketRegime.replace(/_/g, ' ')}</div>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );
+}
+
+function Metric({
+  label,
+  value,
+  valueClass = 'text-gray-100',
+  boxed = false,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+  boxed?: boolean;
+}) {
+  const body = (
+    <>
+      <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em]">{label}</div>
+      <div className={`slab text-base mt-0.5 tabular-nums ${valueClass}`}>{value}</div>
+    </>
+  );
+  if (boxed) return <div className="bg-sd-muted/50 border border-sd-line/60 rounded-lg px-3 py-2">{body}</div>;
+  return <div>{body}</div>;
 }
