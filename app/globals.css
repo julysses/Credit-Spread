@@ -26,6 +26,17 @@
     --input: 220 15% 12%;
     --ring: 221 83% 53%;
     --radius: 0.5rem;
+
+    /* Design system accent (oklch, hue adjustable via JS) */
+    --accent-h: 221;
+    --sd-accent: oklch(0.55 0.22 var(--accent-h));
+    --sd-accent-dim: oklch(0.45 0.18 var(--accent-h));
+
+    /* Semantic signal colors */
+    --bull: #22c55e;
+    --bear: #ff4444;
+    --warn: #fbbf24;
+    --info: #60a5fa;
   }
 }
 
@@ -35,49 +46,105 @@
   }
   body {
     @apply bg-[#060b14] text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
   }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: #0a0f1a;
-}
-::-webkit-scrollbar-thumb {
-  background: #1f2937;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #374151;
-}
+/* ── Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* Recharts customization */
-.recharts-cartesian-grid-horizontal line,
-.recharts-cartesian-grid-vertical line {
-  stroke: #111827;
-}
-
-/* Font mono */
 .font-mono {
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-feature-settings: 'zero', 'ss01';
 }
 
-/* Glow effects for key metrics */
-.text-green-400 { text-shadow: 0 0 10px rgba(74, 222, 128, 0.2); }
-.text-red-400 { text-shadow: 0 0 10px rgba(248, 113, 113, 0.2); }
-.text-blue-400 { text-shadow: 0 0 10px rgba(96, 165, 250, 0.2); }
-
-/* Tab transitions */
-.tab-content-enter {
-  opacity: 0;
-  transform: translateY(4px);
+/* Slab: mono + tight tracking for numbers */
+.slab {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(220 15% 18%); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(220 15% 26%); }
+
+/* ── Accent CSS helpers ── */
+.text-sd-accent  { color: var(--sd-accent); }
+.bg-sd-accent    { background-color: var(--sd-accent); }
+.border-sd-accent { border-color: var(--sd-accent); }
+.bg-sd-accent-soft {
+  background-color: color-mix(in oklch, var(--sd-accent) 14%, transparent);
+}
+.border-sd-accent-soft {
+  border-color: color-mix(in oklch, var(--sd-accent) 35%, transparent);
+}
+.ring-sd-accent { box-shadow: inset 0 0 0 1px var(--sd-accent); }
+
+/* ── Tick animations (live price flashing) ── */
+@keyframes tickup {
+  0%   { color: var(--bull); }
+  70%  { color: var(--bull); }
+  100% { color: inherit; }
+}
+@keyframes tickdown {
+  0%   { color: var(--bear); }
+  70%  { color: var(--bear); }
+  100% { color: inherit; }
+}
+.tick-up   { animation: tickup   1.2s ease-out; }
+.tick-down { animation: tickdown 1.2s ease-out; }
+
+/* ── Live dot pulse ── */
+@keyframes livepulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+.live-dot { animation: livepulse 1.6s ease-in-out infinite; }
+
+/* ── Accordion open ── */
+@keyframes accordion-open {
+  from { max-height: 0; opacity: 0; }
+  to   { max-height: 2000px; opacity: 1; }
+}
+.accordion-open {
+  animation: accordion-open 0.24s ease-out both;
+  overflow: hidden;
+}
+
+/* ── No-trade diagonal hatch ── */
+.hatch-warn {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 10px,
+    rgba(251, 191, 36, 0.05) 10px,
+    rgba(251, 191, 36, 0.05) 20px
+  );
+}
+
+/* ── Dense mode ── */
+.dense .density-p  { padding: 0.875rem 1rem; }
+.dense .density-gap { gap: 0.75rem; }
+
+/* ── Recharts ── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: hsl(220 15% 13%);
+}
+
+/* ── Tab content transition ── */
+.tab-content-enter { opacity: 0; transform: translateY(4px); }
 .tab-content-enter-active {
-  opacity: 1;
-  transform: translateY(0);
+  opacity: 1; transform: translateY(0);
   transition: opacity 200ms, transform 200ms;
+}
+
+/* ── Focus ring ── */
+button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
 }

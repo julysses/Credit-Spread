@@ -52,6 +52,17 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        /* Signal Desk design-system tokens */
+        bg:     "hsl(220 20% 6%)",
+        fg:     "hsl(210 20% 95%)",
+        sd: {
+          card:   "hsl(220 20% 8%)",
+          muted:  "hsl(220 15% 12%)",
+          subtle: "hsl(220 15% 14%)",
+          line:   "hsl(220 15% 15%)",
+          line2:  "hsl(220 15% 20%)",
+          mute:   "hsl(215 15% 55%)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -59,7 +70,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+        mono: ["JetBrains Mono", "Fira Code", "ui-monospace", "monospace"],
       },
       keyframes: {
         "accordion-down": {

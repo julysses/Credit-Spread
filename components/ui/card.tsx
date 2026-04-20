@@ -3,14 +3,15 @@ import { cn } from '@/lib/utils';
 interface CardProps {
   children: React.ReactNode;
   className?: string;
+  [key: string]: unknown;
 }
 
-export function Card({ children, className }: CardProps) {
+export function Card({ children, className, ...rest }: CardProps) {
   return (
-    <div className={cn(
-      'bg-gray-900/80 border border-gray-800/60 rounded-xl backdrop-blur-sm',
-      className
-    )}>
+    <div
+      className={cn('bg-sd-card border border-sd-line rounded-xl overflow-hidden', className)}
+      {...rest}
+    >
       {children}
     </div>
   );
@@ -18,7 +19,7 @@ export function Card({ children, className }: CardProps) {
 
 export function CardHeader({ children, className }: CardProps) {
   return (
-    <div className={cn('px-5 py-4 border-b border-gray-800/60', className)}>
+    <div className={cn('px-5 py-3.5 border-b border-sd-line/70 flex items-center justify-between', className)}>
       {children}
     </div>
   );
@@ -26,7 +27,7 @@ export function CardHeader({ children, className }: CardProps) {
 
 export function CardTitle({ children, className }: CardProps) {
   return (
-    <h3 className={cn('text-sm font-semibold text-gray-200 uppercase tracking-wider', className)}>
+    <h3 className={cn('text-[11px] font-semibold text-gray-300 uppercase tracking-[0.14em]', className)}>
       {children}
     </h3>
   );
