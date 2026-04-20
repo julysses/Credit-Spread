@@ -166,6 +166,14 @@ export default function DashboardPage() {
         {/* ── OPTIONS TAB ── */}
         {tab === 'options' && (
           <div className="space-y-6">
+            {/* Regime Banner — top of dashboard */}
+            <RegimeBanner
+              spxPrice={conditions?.spxPrice}
+              vix={conditions?.vix}
+              spxHigh={conditions?.spxHigh}
+              spxLow={conditions?.spxLow}
+            />
+
             {/* Section header */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
               <div>
@@ -259,14 +267,6 @@ export default function DashboardPage() {
               <SignalStackPanel />
               <JournalStrip trades={state.trades?.trades ?? []} />
             </div>
-
-            {/* Regime timeline */}
-            <RegimeBanner
-              spxPrice={conditions?.spxPrice}
-              vix={conditions?.vix}
-              spxHigh={conditions?.spxHigh}
-              spxLow={conditions?.spxLow}
-            />
 
             {/* Stocks cross-section */}
             <div className="flex items-end justify-between pt-2">

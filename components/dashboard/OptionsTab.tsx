@@ -191,7 +191,7 @@ export function OptionsTab({ spxPrice, vix }: OptionsTabProps) {
   return (
     <div className="space-y-6">
       {/* ── Regime Banner (self-fetching) ────────────────────────────────────── */}
-      <RegimeBanner />
+      <RegimeBanner spxPrice={spxPrice} vix={vix} />
 
       {/* ── Expected Trading Range ───────────────────────────────────────────── */}
       {em1 > 0 && (
