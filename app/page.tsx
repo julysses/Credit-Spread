@@ -261,7 +261,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Regime timeline */}
-            <RegimeBanner />
+            <RegimeBanner
+              spxPrice={conditions?.spxPrice}
+              vix={conditions?.vix}
+              spxHigh={conditions?.spxHigh}
+              spxLow={conditions?.spxLow}
+            />
 
             {/* Stocks cross-section */}
             <div className="flex items-end justify-between pt-2">

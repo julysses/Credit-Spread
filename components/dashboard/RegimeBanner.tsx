@@ -21,6 +21,13 @@ interface RegimeBannerData {
   fetchedAt: number;
 }
 
+interface RegimeBannerProps {
+  spxPrice?: number;
+  vix?: number;
+  spxHigh?: number;
+  spxLow?: number;
+}
+
 const REGIME_CONFIG: Record<FourRegime, {
   badge: 'success' | 'danger' | 'warning' | 'info';
   text: string;
@@ -93,7 +100,86 @@ function SignalPill({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function RegimeBanner() {
+function ExpectedRangeBar({ spxPrice, vix, spxHigh, spxLow }: { spxPrice: number; vix: number; spxHigh?: number; spxLow?: number }) {
+  const dailySigma = spxPrice * (vix / 100) / Math.sqrt(252);
+  const weeklySigma = spxPrice * (vix / 100) / Math.sqrt(52);
+
+  // 1σ and 2σ bands derived from IV
+  const lo1 = spxPrice - dailySigma;
+  const hi1 = spxPrice + dailySigma;
+  const lo2 = spxPrice - 2 * dailySigma;
+  const hi2 = spxPrice + 2 * dailySigma;
+
+  // If we have actual intraday H/L, use the wider of the two for display scale
+  const rangeMin = Math.min(lo2, spxLow ?? lo2) * 0.9995;
+  const rangeMax = Math.max(hi2, spxHigh ?? hi2) * 1.0005;
+  const scale = rangeMax - rangeMin;
+  const pct = (v: number) => `${((v - rangeMin) / scale) * 100}%`;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em]">Expected Trading Range · Today</div>
+
+      {/* Bar */}
+      <div className="relative h-6 bg-sd-muted rounded-md overflow-hidden">
+        {/* 2σ band */}
+        <div className="absolute top-0 bottom-0 bg-blue-500/10 rounded"
+          style={{ left: pct(lo2), right: `${100 - parseFloat(pct(hi2))}%` }} />
+        {/* 1σ band */}
+        <div className="absolute top-0 bottom-0 bg-blue-500/20 rounded"
+          style={{ left: pct(lo1), right: `${100 - parseFloat(pct(hi1))}%` }} />
+        {/* Actual intraday range */}
+        {spxHigh && spxLow && (
+          <div className="absolute top-1 bottom-1 bg-green-400/30 border border-green-400/40 rounded"
+            style={{ left: pct(spxLow), right: `${100 - parseFloat(pct(spxHigh))}%` }} />
+        )}
+        {/* Spot price tick */}
+        <div className="absolute top-0 bottom-0 w-0.5 bg-gray-100/80"
+          style={{ left: pct(spxPrice) }} />
+      </div>
+
+      {/* Labels row */}
+      <div className="grid grid-cols-4 gap-2 text-[10px] font-mono">
+        <div>
+          <div className="text-gray-600 uppercase tracking-wider">−2σ</div>
+          <div className="slab text-gray-300">{lo2.toFixed(0)}</div>
+        </div>
+        <div>
+          <div className="text-gray-600 uppercase tracking-wider">−1σ</div>
+          <div className="slab text-gray-300">{lo1.toFixed(0)}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-gray-600 uppercase tracking-wider">+1σ</div>
+          <div className="slab text-gray-300">{hi1.toFixed(0)}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-gray-600 uppercase tracking-wider">+2σ</div>
+          <div className="slab text-gray-300">{hi2.toFixed(0)}</div>
+        </div>
+      </div>
+
+      {/* Compact summary row */}
+      <div className="flex items-center gap-4 pt-1 text-[10px] font-mono flex-wrap">
+        <span className="text-gray-500">
+          SPOT <span className="slab text-gray-200">{spxPrice.toFixed(2)}</span>
+        </span>
+        <span className="text-gray-500">
+          ±1σ/day <span className="slab text-blue-400">±{dailySigma.toFixed(0)}</span>
+        </span>
+        <span className="text-gray-500">
+          ±1σ/wk <span className="slab text-blue-400">±{weeklySigma.toFixed(0)}</span>
+        </span>
+        {spxHigh && spxLow && (
+          <span className="text-gray-500">
+            Day H/L <span className="slab text-green-400">{spxLow.toFixed(0)}–{spxHigh.toFixed(0)}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function RegimeBanner({ spxPrice, vix, spxHigh, spxLow }: RegimeBannerProps = {}) {
   const [data, setData] = useState<RegimeBannerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +235,13 @@ export function RegimeBanner() {
       </div>
 
       <div className="px-5 py-4 space-y-4">
+        {/* Expected trading range — shown when spxPrice + vix are available */}
+        {spxPrice && vix && (
+          <div className="pb-3 border-b border-sd-line">
+            <ExpectedRangeBar spxPrice={spxPrice} vix={vix} spxHigh={spxHigh} spxLow={spxLow} />
+          </div>
+        )}
+
         {data.regimeDescription && (
           <p className="text-[12.5px] text-gray-300 leading-relaxed">{data.regimeDescription}</p>
         )}
