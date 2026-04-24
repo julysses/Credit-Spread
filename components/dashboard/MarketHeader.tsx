@@ -12,7 +12,8 @@ export type DashTab =
   | 'analytics'
   | 'journal'
   | 'simulator'
-  | 'signal-stack';
+  | 'signal-stack'
+  | 'defense';
 
 interface MarketHeaderProps {
   spxPrice: number;
@@ -60,6 +61,7 @@ const TABS: { id: DashTab; label: string }[] = [
   { id: 'journal',      label: 'JOURNAL'      },
   { id: 'simulator',    label: 'SIMULATOR'    },
   { id: 'signal-stack', label: 'SIGNAL STACK' },
+  { id: 'defense',      label: 'DEFENSE'      },
 ];
 
 export function MarketHeader({
