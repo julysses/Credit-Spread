@@ -363,3 +363,29 @@ export const morningBriefings = pgTable('morning_briefings', {
   fullBrief: text('full_brief'),
 });
 
+// ─────────────────────────────────────────────
+// Defense Events (move log)
+// ─────────────────────────────────────────────
+export const defenseEvents = pgTable('defense_events', {
+  id:          serial('id').primaryKey(),
+  createdAt:   timestamp('created_at').defaultNow().notNull(),
+  eventType:   varchar('event_type', { length: 50 }).notNull(), // 'roll'|'close'|'hedge'|'adjust'|'note'
+  description: text('description').notNull(),
+  spxAtEvent:  real('spx_at_event'),
+  vixAtEvent:  real('vix_at_event'),
+  pnlAtEvent:  real('pnl_at_event'),
+  notes:       text('notes'),
+}, (t) => ({
+  createdIdx: index('defense_events_created_idx').on(t.createdAt),
+}));
+
+// ─────────────────────────────────────────────
+// Defense Tree State (decision tree persistence)
+// ─────────────────────────────────────────────
+export const defenseTreeState = pgTable('defense_tree_state', {
+  id:          serial('id').primaryKey(),
+  updatedAt:   timestamp('updated_at').defaultNow().notNull(),
+  currentNode: varchar('current_node', { length: 100 }).notNull().default('root'),
+  answers:     jsonb('answers').default({}),
+});
+
