@@ -389,3 +389,205 @@ export const defenseTreeState = pgTable('defense_tree_state', {
   answers:     jsonb('answers').default({}),
 });
 
+// ─────────────────────────────────────────────
+// Growth Stock Candidates (daily screener output)
+// ─────────────────────────────────────────────
+export const stockCandidates = pgTable('stock_candidates', {
+  id:                serial('id').primaryKey(),
+  scanDate:          varchar('scan_date', { length: 20 }).notNull(),
+  symbol:            varchar('symbol', { length: 10 }).notNull(),
+  companyName:       varchar('company_name', { length: 255 }),
+  sector:            varchar('sector', { length: 50 }),
+  marketCap:         real('market_cap'),
+  strategyType:      varchar('strategy_type', { length: 20 }).notNull(), // 'short_term'|'long_term'|'future_mover'
+  compositeScore:    real('composite_score').notNull(),
+  momentumScore:     real('momentum_score'),
+  growthScore:       real('growth_score'),
+  valueScore:        real('value_score'),
+  institutionalScore: real('institutional_score'),
+  optionsFlowScore:  real('options_flow_score'),
+  price:             real('price'),
+  priceChangePct:    real('price_change_pct'),
+  volumeRatio:       real('volume_ratio'),
+  rsi14:             real('rsi14'),
+  above200sma:       boolean('above_200sma'),
+  above50ema:        boolean('above_50ema'),
+  revenueGrowthPct:  real('revenue_growth_pct'),
+  epsGrowthPct:      real('eps_growth_pct'),
+  pegRatio:          real('peg_ratio'),
+  aiThesis:          text('ai_thesis'),
+  signals:           jsonb('signals'),
+  createdAt:         timestamp('created_at').defaultNow(),
+}, (t) => ({
+  scanDateIdx: index('stock_candidates_scan_date_idx').on(t.scanDate),
+  symbolIdx:   index('stock_candidates_symbol_idx').on(t.symbol),
+  scoreIdx:    index('stock_candidates_score_idx').on(t.compositeScore),
+  uniqRow:     uniqueIndex('stock_candidates_unique').on(t.scanDate, t.symbol, t.strategyType),
+}));
+
+// ─────────────────────────────────────────────
+// Growth Scan Metadata
+// ─────────────────────────────────────────────
+export const growthScans = pgTable('growth_scans', {
+  id:                serial('id').primaryKey(),
+  scanDate:          varchar('scan_date', { length: 20 }).notNull().unique(),
+  ranAt:             timestamp('ran_at').defaultNow(),
+  totalScreened:     integer('total_screened').default(0),
+  shortTermCount:    integer('short_term_count').default(0),
+  longTermCount:     integer('long_term_count').default(0),
+  futureMoverCount:  integer('future_mover_count').default(0),
+  marketRegime:      varchar('market_regime', { length: 30 }),
+  notes:             text('notes'),
+});
+
+// ─────────────────────────────────────────────
+// Options Flow Alerts
+// ─────────────────────────────────────────────
+export const optionsFlowAlerts = pgTable('options_flow_alerts', {
+  id:                serial('id').primaryKey(),
+  detectedAt:        timestamp('detected_at').defaultNow(),
+  symbol:            varchar('symbol', { length: 10 }).notNull(),
+  alertType:         varchar('alert_type', { length: 30 }), // 'unusual_call'|'unusual_put'|'squeeze_setup'|'dark_pool'
+  strike:            real('strike'),
+  expiry:            varchar('expiry', { length: 20 }),
+  daysToExpiry:      integer('days_to_expiry'),
+  premium:           real('premium'),
+  volume:            integer('volume'),
+  openInterest:      integer('open_interest'),
+  volumeOiRatio:     real('volume_oi_ratio'),
+  impliedVolatility: real('implied_volatility'),
+  sentiment:         varchar('sentiment', { length: 10 }),
+  notes:             text('notes'),
+}, (t) => ({
+  symbolIdx:    index('flow_alerts_symbol_idx').on(t.symbol),
+  detectedIdx:  index('flow_alerts_detected_idx').on(t.detectedAt),
+}));
+
+// ─────────────────────────────────────────────
+// Intelligence Dossiers (top 10 deep-dive)
+// ─────────────────────────────────────────────
+export const intelligenceDossiers = pgTable('intelligence_dossiers', {
+  id:                  serial('id').primaryKey(),
+  dossierDate:         varchar('dossier_date', { length: 20 }).notNull(),
+  symbol:              varchar('symbol', { length: 10 }).notNull(),
+  fundamentalsData:    jsonb('fundamentals_data'),
+  valuationData:       jsonb('valuation_data'),
+  newsData:            jsonb('news_data'),
+  institutionalData:   jsonb('institutional_data'),
+  optionsData:         jsonb('options_data'),
+  technicalsData:      jsonb('technicals_data'),
+  sectorData:          jsonb('sector_data'),
+  aiMemo:              text('ai_memo'),
+  bullCase:            text('bull_case'),
+  bearCase:            text('bear_case'),
+  entryStrategy:       text('entry_strategy'),
+  keyRisks:            text('key_risks'),
+  targetPriceRange:    varchar('target_price_range', { length: 50 }),
+  convictionLevel:     varchar('conviction_level', { length: 20 }), // 'High'|'Medium'|'Speculative'
+  createdAt:           timestamp('created_at').defaultNow(),
+}, (t) => ({
+  dateSymbolUniq: uniqueIndex('dossiers_date_symbol_idx').on(t.dossierDate, t.symbol),
+}));
+
+// ─────────────────────────────────────────────
+// Stock Parameter Snapshots (ML training data)
+// ─────────────────────────────────────────────
+export const stockParameterSnapshots = pgTable('stock_parameter_snapshots', {
+  id:                    serial('id').primaryKey(),
+  snapshotDate:          varchar('snapshot_date', { length: 20 }).notNull(),
+  symbol:                varchar('symbol', { length: 10 }).notNull(),
+  sector:                varchar('sector', { length: 50 }),
+  marketCap:             real('market_cap'),
+  // Price & volume
+  price:                 real('price'),
+  priceOpen:             real('price_open'),
+  priceHigh:             real('price_high'),
+  priceLow:              real('price_low'),
+  volume:                real('volume'),
+  avgVolume20d:          real('avg_volume_20d'),
+  volumeRatio:           real('volume_ratio'),
+  dayChangePct:          real('day_change_pct'),
+  weekChangePct:         real('week_change_pct'),
+  monthChangePct:        real('month_change_pct'),
+  threeMonthChangePct:   real('three_month_change_pct'),
+  fiftyTwoWeekHigh:      real('fifty_two_week_high'),
+  fiftyTwoWeekLow:       real('fifty_two_week_low'),
+  distFromHigh52w:       real('dist_from_high_52w'),
+  // Technical indicators
+  rsi14:                 real('rsi14'),
+  rsi2:                  real('rsi2'),
+  macdLine:              real('macd_line'),
+  macdSignal:            real('macd_signal'),
+  macdHistogram:         real('macd_histogram'),
+  sma20:                 real('sma20'),
+  sma50:                 real('sma50'),
+  sma200:                real('sma200'),
+  ema20:                 real('ema20'),
+  ema50:                 real('ema50'),
+  priceVsSma20Pct:       real('price_vs_sma20_pct'),
+  priceVsSma50Pct:       real('price_vs_sma50_pct'),
+  priceVsSma200Pct:      real('price_vs_sma200_pct'),
+  sma50VsSma200Pct:      real('sma50_vs_sma200_pct'),
+  atr14:                 real('atr14'),
+  atrPct:                real('atr_pct'),
+  relStrengthVsSpy1m:    real('rel_strength_vs_spy_1m'),
+  relStrengthVsSpy3m:    real('rel_strength_vs_spy_3m'),
+  // Fundamental raw inputs
+  revenueGrowthYoy:      real('revenue_growth_yoy'),
+  revenueGrowthQoq:      real('revenue_growth_qoq'),
+  epsGrowthYoy:          real('eps_growth_yoy'),
+  epsGrowthQoq:          real('eps_growth_qoq'),
+  grossMargin:           real('gross_margin'),
+  operatingMargin:       real('operating_margin'),
+  netMargin:             real('net_margin'),
+  fcfMargin:             real('fcf_margin'),
+  roe:                   real('roe'),
+  roa:                   real('roa'),
+  debtToEbitda:          real('debt_to_ebitda'),
+  currentRatio:          real('current_ratio'),
+  peRatio:               real('pe_ratio'),
+  forwardPe:             real('forward_pe'),
+  psRatio:               real('ps_ratio'),
+  pbRatio:               real('pb_ratio'),
+  evEbitda:              real('ev_ebitda'),
+  pegRatio:              real('peg_ratio'),
+  earningsSurprisePct:   real('earnings_surprise_pct'),
+  earningsSurprise4q:    real('earnings_surprise_4q'),
+  analystTargetPrice:    real('analyst_target_price'),
+  impliedUpside:         real('implied_upside'),
+  epsRevisionUp30d:      integer('eps_revision_up_30d'),
+  epsRevisionDown30d:    integer('eps_revision_down_30d'),
+  // Institutional & smart money
+  institutionalOwnership: real('institutional_ownership'),
+  hfNetShareChangePct:   real('hf_net_share_change_pct'),
+  insiderNetBuyDollars:  real('insider_net_buy_dollars'),
+  shortFloatPct:         real('short_float_pct'),
+  shortDaysToCover:      real('short_days_to_cover'),
+  // Options market
+  ivRank:                real('iv_rank'),
+  ivPercentile:          real('iv_percentile'),
+  putCallOiRatio:        real('put_call_oi_ratio'),
+  putCallVolumeRatio:    real('put_call_volume_ratio'),
+  unusualFlowFlag:       boolean('unusual_flow_flag'),
+  impliedMoveEarnings:   real('implied_move_earnings'),
+  // Macro context
+  spxRegime:             varchar('spx_regime', { length: 30 }),
+  signalStackComposite:  real('signal_stack_composite'),
+  vixLevel:              real('vix_level'),
+  // Scores
+  compositeShortTerm:    real('composite_short_term'),
+  compositeLongTerm:     real('composite_long_term'),
+  // Forward return labels (filled in by label-returns worker)
+  returnFwd5d:           real('return_fwd_5d'),
+  returnFwd10d:          real('return_fwd_10d'),
+  returnFwd30d:          real('return_fwd_30d'),
+  returnFwd60d:          real('return_fwd_60d'),
+  returnFwd90d:          real('return_fwd_90d'),
+  labeledAt:             timestamp('labeled_at'),
+  createdAt:             timestamp('created_at').defaultNow(),
+}, (t) => ({
+  dateIdx:   index('param_snap_date_idx').on(t.snapshotDate),
+  symbolIdx: index('param_snap_symbol_idx').on(t.symbol),
+  uniqRow:   uniqueIndex('param_snap_unique').on(t.snapshotDate, t.symbol),
+}));
+

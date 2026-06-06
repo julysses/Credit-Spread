@@ -12,7 +12,9 @@
     "db:studio": "drizzle-kit studio",
     "worker:morning": "tsx workers/morning-briefing.ts",
     "worker:scanner": "tsx workers/market-scanner.ts",
-    "worker:alerts": "tsx workers/alert-system.ts"
+    "worker:alerts": "tsx workers/alert-system.ts",
+    "worker:growth": "tsx workers/daily-growth-screener.ts",
+    "worker:label": "tsx workers/label-returns.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

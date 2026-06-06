@@ -7,7 +7,8 @@ import { TradeCard } from '@/components/dashboard/TradeCard';
 import { MarketRegimeCard } from '@/components/dashboard/MarketRegimeCard';
 import { TradeJournal } from '@/components/dashboard/TradeJournal';
 import { SignalStackEngine } from '@/components/dashboard/SignalStackEngine';
-import { DefenseTab } from '@/components/dashboard/defense/DefenseTab';
+import { DefenseTab }  from '@/components/dashboard/defense/DefenseTab';
+import { GrowthTab }   from '@/components/dashboard/GrowthTab';
 import { OptionsTab } from '@/components/dashboard/OptionsTab';
 import { StocksDaytradeTab } from '@/components/dashboard/StocksDaytradeTab';
 import { RegimeBanner } from '@/components/dashboard/RegimeBanner';
@@ -392,6 +393,18 @@ export default function DashboardPage() {
               iv={conditions?.impliedVol ?? 0.18}
               lastUpdated={state.lastUpdated}
             />
+          </div>
+        )}
+
+        {/* ── GROWTH TAB ── */}
+        {tab === 'growth' && (
+          <div className="space-y-6">
+            <SectionHeader
+              label="GROWTH · MOMENTUM · VALUE"
+              title="Growth & Momentum Screener"
+              subtitle="Hedge-fund level screening · institutional signals · AI dossiers"
+            />
+            <GrowthTab />
           </div>
         )}
       </main>
