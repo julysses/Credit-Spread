@@ -264,7 +264,7 @@ function getMockSectorPE(): SectorPE[] {
 
 function getMockGainers(): Gainer[] {
   return [
-    { symbol: 'NVDA', name: 'NVIDIA Corp',         change: 12.3, changesPercentage: 4.2,  price: 875,  volume: 45e6 },
+    { symbol: 'NVDA', name: 'NVIDIA Corp',         change: 5.1,  changesPercentage: 3.9,  price: 134,  volume: 45e6 },
     { symbol: 'CRWD', name: 'CrowdStrike',          change: 8.7,  changesPercentage: 3.8,  price: 380,  volume: 8e6  },
     { symbol: 'DDOG', name: 'Datadog',              change: 6.4,  changesPercentage: 3.1,  price: 195,  volume: 5e6  },
     { symbol: 'AXON', name: 'Axon Enterprise',      change: 9.2,  changesPercentage: 3.5,  price: 310,  volume: 3e6  },
@@ -276,7 +276,7 @@ function getMockActives(): MostActive[] {
   return [
     { symbol: 'AAPL',  name: 'Apple Inc',           change:  2.1, changesPercentage: 1.1,  price: 213, volume: 85e6 },
     { symbol: 'TSLA',  name: 'Tesla Inc',            change: -3.4, changesPercentage: -1.5, price: 255, volume: 78e6 },
-    { symbol: 'NVDA',  name: 'NVIDIA Corp',          change: 12.3, changesPercentage: 4.2,  price: 875, volume: 45e6 },
+    { symbol: 'NVDA',  name: 'NVIDIA Corp',          change: 5.1,  changesPercentage: 3.9,  price: 134, volume: 45e6 },
     { symbol: 'AMZN',  name: 'Amazon',               change:  4.5, changesPercentage: 2.3,  price: 195, volume: 38e6 },
     { symbol: 'MSFT',  name: 'Microsoft',            change:  1.8, changesPercentage: 0.4,  price: 435, volume: 25e6 },
   ];
