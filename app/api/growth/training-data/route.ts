@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/database';
+import { db } from '@/database/db';
 import { stockParameterSnapshots } from '@/database/schema';
 import { and, gte, lte, isNotNull, sql } from 'drizzle-orm';
 

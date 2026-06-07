@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/database';
+import { db } from '@/database/db';
 import { intelligenceDossiers } from '@/database/schema';
 import { and, eq, desc } from 'drizzle-orm';
 import { getMockDossier } from '@/server/intelligence-dossier';

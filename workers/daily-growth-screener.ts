@@ -4,7 +4,7 @@
  * Uses mock data when API keys are absent; live data flows in once keys are configured.
  */
 
-import { db } from '@/database';
+import { db } from '@/database/db';
 import {
   stockCandidates,
   growthScans,

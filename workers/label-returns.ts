@@ -5,7 +5,7 @@
  * for stock_parameter_snapshots rows old enough to have data.
  */
 
-import { db } from '@/database';
+import { db } from '@/database/db';
 import { stockParameterSnapshots } from '@/database/schema';
 import { isNull, lte, and, eq } from 'drizzle-orm';
 

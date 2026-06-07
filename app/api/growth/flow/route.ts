@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/database';
+import { db } from '@/database/db';
 import { optionsFlowAlerts } from '@/database/schema';
 import { desc, gte } from 'drizzle-orm';
 
