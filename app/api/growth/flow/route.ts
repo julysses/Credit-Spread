@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const days  = Math.min(parseInt(searchParams.get('days') ?? '7'), 30);
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '50'), 200);
-    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const since = new Date(Date.now() - days * 86400000);
 
     const alerts = await db
       .select()

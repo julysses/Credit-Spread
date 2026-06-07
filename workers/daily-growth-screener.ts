@@ -138,7 +138,7 @@ function getSignalStackComposite(): number {
 async function run() {
   console.log('[screener] Starting daily growth scan…');
   const scanDate = new Date().toISOString().split('T')[0];
-  const ranAt    = new Date().toISOString();
+  const ranAt    = new Date();
 
   // ── Phase 1: Market Context ────────────────────────────────────────────────
   console.log('[screener] Phase 1 — market context');
@@ -354,10 +354,10 @@ async function run() {
 
   // ── Phase 7: Intelligence Dossiers for Top 10 ─────────────────────────────
   console.log('[screener] Phase 7 — intelligence dossiers');
-  const topUnique = [...new Map(
+  const topUnique = Array.from(new Map(
     [...shortTermPicks, ...longTermPicks, ...futurePicks]
       .map(s => [s.symbol, s])
-  ).values()].slice(0, 10);
+  ).values()).slice(0, 10);
 
   const dossierResults = await Promise.allSettled(
     topUnique.map(entry =>
@@ -429,7 +429,7 @@ async function run() {
   }
 
   // Save options flow alerts
-  for (const [symbol, flow] of flowMap.entries()) {
+  for (const [symbol, flow] of Array.from(flowMap.entries())) {
     for (const alert of flow.alerts.slice(0, 3)) {
       await db.insert(optionsFlowAlerts).values({
         symbol,

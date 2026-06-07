@@ -126,7 +126,7 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
               }
             </div>
           )}
-          {newsData?.nextEarnings && (
+          {!!newsData?.nextEarnings && (
             <div className="text-[10px] font-mono text-yellow-400 mt-2">
               📅 Next Earnings: {newsData.nextEarnings as string}
             </div>

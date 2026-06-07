@@ -85,10 +85,10 @@ export interface AnalystEstimatesData {
 // ─── FMP Helpers ──────────────────────────────────────────────────────────────
 
 function fmpGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  return axios.get<{ data: T }>(`${FMP_BASE}/${path}`, {
+  return axios.get<T>(`${FMP_BASE}/${path}`, {
     params: { ...params, apikey: process.env.FMP_API_KEY },
     timeout: 10000,
-  }).then((r: { data: T }) => r.data);
+  }).then(r => r.data);
 }
 
 function safeNum(v: unknown, fallback = 0): number {
