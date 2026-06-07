@@ -79,7 +79,7 @@ async function run() {
 
   let labeled = 0;
 
-  for (const [symbol, symbolRows] of bySymbol.entries()) {
+  for (const [symbol, symbolRows] of Array.from(bySymbol.entries())) {
     const currentPrice = await fetchCurrentPrice(symbol);
     if (!currentPrice) {
       await sleep(100);
@@ -87,7 +87,7 @@ async function run() {
     }
 
     for (const row of symbolRows) {
-      const snapshotPrice = parseFloat(row.price ?? '0');
+      const snapshotPrice = Number(row.price ?? 0);
       if (!snapshotPrice || snapshotPrice <= 0) continue;
 
       const ret = (currentPrice - snapshotPrice) / snapshotPrice * 100;

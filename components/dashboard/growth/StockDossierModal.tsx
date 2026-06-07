@@ -64,7 +64,7 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
 
   const fundamentalsData  = dossier?.fundamentalsData  as Record<string, unknown> | undefined;
   const valuationData     = dossier?.valuationData     as Record<string, unknown> | undefined;
-  const newsData          = dossier?.newsData          as Record<string, unknown> | undefined;
+  const newsData          = (dossier?.newsData ?? dossier?.layer3_news) as Record<string, unknown> | undefined;
   const institutionalData = dossier?.institutionalData as Record<string, unknown> | undefined;
   const optionsData       = dossier?.optionsData       as Record<string, unknown> | undefined;
   const technicalsData    = dossier?.technicalsData    as Record<string, unknown> | undefined;
@@ -73,6 +73,11 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
   const priceChange = parseFloat(candidate.priceChangePct ?? '0');
   const rsi = parseFloat(candidate.rsi ?? '50');
   const convictionColor = conviction === 'High' ? 'text-green-400' : conviction === 'Speculative' ? 'text-yellow-400' : 'text-blue-400';
+  const newsHeadlines = Array.isArray(newsData?.headlines)
+    ? newsData.headlines.filter((headline): headline is string => typeof headline === 'string')
+    : undefined;
+  const newsSentiment = typeof newsData?.sentiment === 'string' ? newsData.sentiment : undefined;
+  const nextEarnings = typeof newsData?.nextEarnings === 'string' ? newsData.nextEarnings : undefined;
 
   const LAYERS: DossierLayer[] = [
     {
@@ -112,23 +117,23 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
       icon: '📰',
       content: (
         <div className="space-y-3">
-          {newsData?.headlines ? (
-            (newsData.headlines as string[]).map((h, i) => (
+          {newsHeadlines?.length ? (
+            newsHeadlines.map((h, i) => (
               <div key={i} className="text-[11px] text-gray-300 border-b border-sd-line/30 pb-2">{h}</div>
             ))
           ) : (
             <div className="text-[11px] text-gray-500">
-              {newsData?.sentiment === 'bullish'
+              {newsSentiment === 'bullish'
                 ? '📈 Recent news sentiment: positive — management tone bullish in latest transcript'
-                : newsData?.sentiment === 'bearish'
+                : newsSentiment === 'bearish'
                 ? '📉 Recent news sentiment: cautious — watch for guidance revisions'
                 : '📰 Loading news analysis…'
               }
             </div>
           )}
-          {newsData?.nextEarnings && (
+          {nextEarnings && (
             <div className="text-[10px] font-mono text-yellow-400 mt-2">
-              📅 Next Earnings: {newsData.nextEarnings as string}
+              📅 Next Earnings: {nextEarnings}
             </div>
           )}
         </div>

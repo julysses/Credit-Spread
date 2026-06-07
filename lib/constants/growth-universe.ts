@@ -121,12 +121,12 @@ export const GROWTH_SECTORS: SectorGroup[] = [
 
 // Flat list of all unique symbols
 export const ALL_GROWTH_SYMBOLS: string[] = [
-  ...new Set(GROWTH_SECTORS.flatMap(s => s.symbols)),
+  ...Array.from(new Set(GROWTH_SECTORS.flatMap(s => s.symbols))),
 ];
 
 // Sector ETFs used for rotation analysis
 export const SECTOR_ETFS: string[] = [
-  ...new Set(GROWTH_SECTORS.map(s => s.etf)),
+  ...Array.from(new Set(GROWTH_SECTORS.map(s => s.etf))),
   'SPY','QQQ','IWM', // benchmark ETFs
 ];
 

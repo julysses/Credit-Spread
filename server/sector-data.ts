@@ -13,7 +13,7 @@ function fmpStable<T>(endpoint: string, params: Record<string, string> = {}): Pr
   return axios.get<T>(`${FMP_STABLE}/${endpoint}`, {
     params: { ...params, apikey: process.env.FMP_API_KEY },
     timeout: 12000,
-  }).then((r: { data: T }) => r.data);
+  }).then(r => r.data);
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
