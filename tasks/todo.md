@@ -26,4 +26,4 @@
 - [x] Identify why stats render as `--`.
 - [x] Update modal to support layered Growth dossier API fields.
 - [x] Build and verify dossier stats locally.
-- [ ] Commit, push, and verify Vercel deployment.
+- [x] Commit, push, and verify Vercel deployment.
