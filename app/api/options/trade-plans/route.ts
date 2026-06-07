@@ -31,6 +31,11 @@ export interface OptionsLeg {
   iv: number;
 }
 
+export interface ConditionStatus {
+  label: string;
+  met: boolean;
+}
+
 export interface OptionsTradePlan {
   strategyId: string;
   strategyName: string;
@@ -58,6 +63,12 @@ export interface OptionsTradePlan {
   management: string[];
   conditions: string[];
   warnings: string[];
+  // Hedge-fund clarity fields
+  thesis: string;
+  entryLabel: string;
+  exitLabel: string;
+  stopLabel: string;
+  conditionStatus: ConditionStatus[];
 }
 
 // ─── Date Helpers ─────────────────────────────────────────────────────────────
@@ -172,6 +183,28 @@ function priceleg(
   };
 }
 
+// ─── Hedge-Fund Clarity Helpers ───────────────────────────────────────────────
+
+function buildClarityFields(
+  credit: number | null,
+  debit: number | null,
+  profitTarget: number,
+  stopLoss: number,
+  thesisText: string,
+  conditionStatus: ConditionStatus[]
+): Pick<OptionsTradePlan, 'thesis' | 'entryLabel' | 'exitLabel' | 'stopLabel' | 'conditionStatus'> {
+  const isCredit = credit != null;
+  const entryAmt  = isCredit ? credit! : debit!;
+  const entryWord = isCredit ? 'credit' : 'debit';
+  return {
+    thesis: thesisText,
+    entryLabel: `${isCredit ? 'Collect' : 'Pay'} $${entryAmt}/contract (${entryWord})`,
+    exitLabel:  `Close at $${profitTarget}/contract — ${isCredit ? '50% profit' : '100% gain'}`,
+    stopLabel:  `Exit at $${stopLoss}/contract — max loss`,
+    conditionStatus,
+  };
+}
+
 // ─── Trade Plan Builders ──────────────────────────────────────────────────────
 
 function buildIronCondorPlan(
@@ -204,6 +237,8 @@ function buildIronCondorPlan(
   const profitTarget = parseFloat((netCreditContract * 0.50).toFixed(0));
   const stopLoss = parseFloat((netCreditContract * 2.0).toFixed(0));
 
+  const icThesis = `VIX ${vix.toFixed(1)} with IVR ${ivr} — range-bound regime supports the 0DTE Iron Condor. Short strikes placed at 12Δ OTM (${shortPutStrike}P / ${shortCallStrike}C), breakevens at ${(shortPutStrike - totalCredit).toFixed(0)} and ${(shortCallStrike + totalCredit).toFixed(0)}. Collect $${netCreditContract}/contract; target 50% profit at $${profitTarget} or exit hard at $${stopLoss} loss.`;
+
   return {
     strategyId: 'GEX_IRON_CONDOR', strategyName: '0DTE GEX Iron Condor',
     category: 'options_day_trade', structure: 'Iron Condor',
@@ -234,6 +269,12 @@ function buildIronCondorPlan(
       `IVR ≈ ${ivr} — IV environment supports premium selling`,
     ],
     warnings: vix > 25 ? ['Elevated VIX — widen wings to $15–$20 or skip'] : [],
+    ...buildClarityFields(netCreditContract, null, profitTarget, stopLoss, icThesis, [
+      { label: `VIX < 25 (now ${vix.toFixed(1)})`, met: vix < 25 },
+      { label: `IVR ≥ 20 (now ${ivr})`, met: ivr >= 20 },
+      { label: `Regime: range-bound`, met: regime === 'RANGE_BOUND' || Math.abs(compositeScore) <= 1.5 },
+      { label: `Entry window open (10AM–12PM)`, met: (() => { const now = new Date(); const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })); const hm = et.getHours() * 100 + et.getMinutes(); return hm >= 1000 && hm <= 1200; })() },
+    ]),
   };
 }
 
@@ -264,6 +305,8 @@ function buildDirectionalDebitPlan(
     ? longStrike + netDebitPerShare
     : longStrike - netDebitPerShare;
 
+  const dirThesis = `Composite score ${compositeScore >= 0 ? '+' : ''}${compositeScore.toFixed(2)} supports ${direction} directional bias — entering ATM ${side} debit spread on ORB/VWAP confirmation. Pay $${netDebitContract}/contract; target doubles at $${profitTarget}, stop at $${stopLoss} (50% loss).`;
+
   return {
     strategyId: 'GEX_DIRECTIONAL_DEBIT',
     strategyName: `0DTE Directional ${side === 'call' ? 'Call' : 'Put'} Debit Spread`,
@@ -292,6 +335,11 @@ function buildDirectionalDebitPlan(
     warnings: Math.abs(compositeScore) < 1.5
       ? ['Score below ±1.5 — directional conviction low, consider skipping']
       : [],
+    ...buildClarityFields(null, netDebitContract, profitTarget, stopLoss, dirThesis, [
+      { label: `Score > ±1.5 (now ${compositeScore.toFixed(2)})`, met: Math.abs(compositeScore) >= 1.5 },
+      { label: `${direction} directional bias`, met: true },
+      { label: `Entry window (9:45–11AM)`, met: (() => { const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); const hm = et.getHours() * 100 + et.getMinutes(); return hm >= 945 && hm <= 1100; })() },
+    ]),
   };
 }
 
@@ -313,6 +361,11 @@ function buildORBOptionsPlan(
   const netDebit = parseFloat((longLeg.premium - shortLeg.premium).toFixed(2));
   const netDebitContract = parseFloat((netDebit * 100).toFixed(0));
 
+  const orbNetDebitContract = netDebitContract;
+  const orbProfitTarget = parseFloat((orbNetDebitContract * 1.0).toFixed(0));
+  const orbStopLoss = parseFloat((orbNetDebitContract * 0.50).toFixed(0));
+  const orbThesis = `ORB breakout strategy — enter on 30-min OR ${side === 'call' ? 'breakout above' : 'breakdown below'} with RVOL > 1.5×. Pay $${orbNetDebitContract}/contract; target at $${orbProfitTarget} (spread doubles). Stop triggers on price re-entry into OR.`;
+
   return {
     strategyId: 'ORB_OPTIONS',
     strategyName: `ORB ${side === 'call' ? 'Call' : 'Put'} Debit Spread (0DTE)`,
@@ -321,12 +374,12 @@ function buildORBOptionsPlan(
     entryTimeWindow: '10:00 AM – 10:30 AM ET',
     entryNote: `Wait for 30-min ORB to form (9:30–10:00 AM). Enter on first 5-min candle CLOSE beyond OR boundary with RVOL > 1.5×. OR width must be 0.2–0.5% of SPX.`,
     legs: [longLeg, shortLeg],
-    netCredit: null, netDebit: netDebitContract,
+    netCredit: null, netDebit: orbNetDebitContract,
     maxProfit: parseFloat(((width - netDebit) * 100).toFixed(0)),
-    maxLoss: netDebitContract,
-    profitTarget: parseFloat((netDebitContract * 1.0).toFixed(0)),
+    maxLoss: orbNetDebitContract,
+    profitTarget: orbProfitTarget,
     profitTargetRule: '100% of debit paid (spread doubles)',
-    stopLoss: parseFloat((netDebitContract * 0.50).toFixed(0)),
+    stopLoss: orbStopLoss,
     stopLossRule: 'Price closes BACK INSIDE the Opening Range (price-based stop)',
     breakevens: [
       parseFloat((side === 'call' ? longStrike + netDebit : longStrike - netDebit).toFixed(2))
@@ -343,6 +396,10 @@ function buildORBOptionsPlan(
       'VWAP aligned with breakout direction',
     ],
     warnings: [],
+    ...buildClarityFields(null, orbNetDebitContract, orbProfitTarget, orbStopLoss, orbThesis, [
+      { label: `ORB formed (10:00AM+)`, met: (() => { const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); return et.getHours() * 100 + et.getMinutes() >= 1000; })() },
+      { label: `Directional bias (score ${compositeScore.toFixed(1)})`, met: Math.abs(compositeScore) >= 0.5 },
+    ]),
   };
 }
 
@@ -364,6 +421,10 @@ function buildButterflyPlan(
   const netDebitContract = Math.max(parseFloat((netDebit * 100).toFixed(0)), 25);
   const maxProfit = parseFloat(((width - netDebit) * 100).toFixed(0));
 
+  const bfProfitTarget = parseFloat((netDebitContract * 0.75).toFixed(0));
+  const bfStopLoss = parseFloat((netDebitContract * 0.50).toFixed(0));
+  const bfThesis = `Neutral regime — SPX pinning near ${body} (max pain / POC). Butterfly captures 75% of debit if price closes at body strike. Pay $${netDebitContract}/contract; target at $${bfProfitTarget}, stop at $${bfStopLoss}. Exit hard at 3:45 PM.`;
+
   return {
     strategyId: 'BUTTERFLY_PIN',
     strategyName: `0DTE Butterfly — Pin at ${body}`,
@@ -376,9 +437,9 @@ function buildButterflyPlan(
     ]),
     netCredit: null, netDebit: netDebitContract,
     maxProfit, maxLoss: netDebitContract,
-    profitTarget: parseFloat((netDebitContract * 0.75).toFixed(0)),
+    profitTarget: bfProfitTarget,
     profitTargetRule: '75% of debit paid (partial profit at max pain zone)',
-    stopLoss: parseFloat((netDebitContract * 0.50).toFixed(0)),
+    stopLoss: bfStopLoss,
     stopLossRule: '50% loss of debit paid ($' + (netDebitContract * 0.5).toFixed(0) + ')',
     breakevens: [
       parseFloat((lowerWing + netDebit).toFixed(2)),
@@ -396,6 +457,10 @@ function buildButterflyPlan(
       'Enter between 11:00 AM and 2:00 PM only',
     ],
     warnings: Math.abs(compositeScore) > 1.5 ? ['Score indicates directional bias — butterfly not ideal, consider debit spread instead'] : [],
+    ...buildClarityFields(null, netDebitContract, bfProfitTarget, bfStopLoss, bfThesis, [
+      { label: `Score neutral (±1.5), now ${compositeScore.toFixed(1)}`, met: Math.abs(compositeScore) <= 1.5 },
+      { label: `Entry window (11AM–2PM)`, met: (() => { const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); const hm = et.getHours() * 100 + et.getMinutes(); return hm >= 1100 && hm <= 1400; })() },
+    ]),
   };
 }
 
@@ -415,6 +480,10 @@ function buildRSI2SwingPlan(
   const netDebit = parseFloat((longLeg.premium - shortLeg.premium).toFixed(2));
   const netDebitContract = parseFloat((netDebit * 100).toFixed(0));
 
+  const rsiProfitTarget = parseFloat((netDebitContract * 1.0).toFixed(0));
+  const rsiStopLoss = parseFloat((netDebitContract * 0.40).toFixed(0));
+  const rsiThesis = `RSI(2) mean reversion setup — daily RSI(2) ≤ 10 signals extreme short-term oversold condition while SPX holds above 200-day SMA. Bull call spread captures 2–6 day bounce. Pay $${netDebitContract}/contract; target at $${rsiProfitTarget} (100% gain) or close when RSI(2) > 65.`;
+
   return {
     strategyId: 'RSI2_MEAN_REVERSION',
     strategyName: 'RSI(2) Mean Reversion — Swing Call Spread',
@@ -426,9 +495,9 @@ function buildRSI2SwingPlan(
     netCredit: null, netDebit: netDebitContract,
     maxProfit: parseFloat(((width - netDebit) * 100).toFixed(0)),
     maxLoss: netDebitContract,
-    profitTarget: parseFloat((netDebitContract * 1.0).toFixed(0)),
+    profitTarget: rsiProfitTarget,
     profitTargetRule: `100% gain on spread OR price closes above 5-day SMA`,
-    stopLoss: parseFloat((netDebitContract * 0.40).toFixed(0)),
+    stopLoss: rsiStopLoss,
     stopLossRule: `40% of debit lost OR price closes below 200-day SMA`,
     breakevens: [parseFloat((longStrike + netDebit).toFixed(2))],
     wingWidth: width, ivr, vix, spxPrice: spx,
@@ -444,6 +513,11 @@ function buildRSI2SwingPlan(
       `Macro composite score > 0 preferred`,
     ],
     warnings: compositeScore < 0 ? ['Macro score negative — mean reversion has macro headwinds, reduce size'] : [],
+    ...buildClarityFields(null, netDebitContract, rsiProfitTarget, rsiStopLoss, rsiThesis, [
+      { label: `RSI(2) ≤ 10 on daily (verify chart)`, met: false },
+      { label: `SPX above 200-day SMA`, met: compositeScore > -2 },
+      { label: `Macro score > 0 (now ${compositeScore.toFixed(1)})`, met: compositeScore > 0 },
+    ]),
   };
 }
 
@@ -470,6 +544,10 @@ function buildEarningsCondorPlan(
   const netCreditContract = parseFloat((totalCredit * 100).toFixed(0));
   const maxLoss = parseFloat(((wingWidth - totalCredit) * 100).toFixed(0));
 
+  const earnProfitTarget = parseFloat((netCreditContract * 0.50).toFixed(0));
+  const earnStopLoss = parseFloat((netCreditContract * 2.0).toFixed(0));
+  const earnThesis = `Earnings IV crush — sell condor ${dte} DTE to capture IV deflation post-announcement. IVR ${ivr} ${ivr >= 50 ? '✓ sufficient edge' : '⚠ below ideal 50'}. Collect $${netCreditContract}/contract; target 50% profit at $${earnProfitTarget} or close 2 days post-earnings.`;
+
   return {
     strategyId: 'EARNINGS_VOL_CRUSH',
     strategyName: 'Earnings IV Crush — Short Iron Condor',
@@ -480,9 +558,9 @@ function buildEarningsCondorPlan(
     legs,
     netCredit: netCreditContract, netDebit: null,
     maxProfit: netCreditContract, maxLoss,
-    profitTarget: parseFloat((netCreditContract * 0.50).toFixed(0)),
+    profitTarget: earnProfitTarget,
     profitTargetRule: '50% of credit received (close order)',
-    stopLoss: parseFloat((netCreditContract * 2.0).toFixed(0)),
+    stopLoss: earnStopLoss,
     stopLossRule: '200% of credit per side breached (2× the credit of that spread)',
     breakevens: [
       parseFloat((shortPutStrike - totalCredit).toFixed(2)),
@@ -501,6 +579,10 @@ function buildEarningsCondorPlan(
       'Liquid options chain required (< $0.10 bid/ask on short strikes)',
     ],
     warnings: ivr < 50 ? [`IVR ${ivr} < 50 — IV crush edge reduced, consider skipping`] : [],
+    ...buildClarityFields(netCreditContract, null, earnProfitTarget, earnStopLoss, earnThesis, [
+      { label: `IVR ≥ 50 for IV crush edge (now ${ivr})`, met: ivr >= 50 },
+      { label: `Earnings 1–3 days away (verify calendar)`, met: false },
+    ]),
   };
 }
 
@@ -519,6 +601,10 @@ function buildVCPSwingPlan(
   const netDebit = parseFloat((longLeg.premium - shortLeg.premium).toFixed(2));
   const netDebitContract = parseFloat((netDebit * 100).toFixed(0));
 
+  const vcpProfitTarget = parseFloat((netDebitContract * 1.0).toFixed(0));
+  const vcpStopLoss = parseFloat((netDebitContract * 0.40).toFixed(0));
+  const vcpThesis = `VCP (Volatility Contraction Pattern) breakout — Minervini trend template with 2–6 contractions, entering above pivot with 2–3× volume confirmation. Composite score ${compositeScore >= 0 ? '+' : ''}${compositeScore.toFixed(2)} confirms macro tailwind. Pay $${netDebitContract}/contract; target doubles at $${vcpProfitTarget} over ${dte} days.`;
+
   return {
     strategyId: 'MOMENTUM_VCP',
     strategyName: 'Momentum VCP Breakout — Bull Call Spread',
@@ -530,9 +616,9 @@ function buildVCPSwingPlan(
     netCredit: null, netDebit: netDebitContract,
     maxProfit: parseFloat(((width - netDebit) * 100).toFixed(0)),
     maxLoss: netDebitContract,
-    profitTarget: parseFloat((netDebitContract * 1.0).toFixed(0)),
+    profitTarget: vcpProfitTarget,
     profitTargetRule: '100% gain (spread doubles)',
-    stopLoss: parseFloat((netDebitContract * 0.40).toFixed(0)),
+    stopLoss: vcpStopLoss,
     stopLossRule: '40% of debit lost OR price closes below VCP pivot',
     breakevens: [parseFloat((longStrike + netDebit).toFixed(2))],
     wingWidth: width, ivr, vix, spxPrice: spx,
@@ -549,6 +635,11 @@ function buildVCPSwingPlan(
       'Breakout on 2–3× average volume',
     ],
     warnings: compositeScore < 1.5 ? ['Composite score < 1.5 — momentum may lack macro support'] : [],
+    ...buildClarityFields(null, netDebitContract, vcpProfitTarget, vcpStopLoss, vcpThesis, [
+      { label: `Score > +1.5 for momentum (now ${compositeScore.toFixed(1)})`, met: compositeScore >= 1.5 },
+      { label: `VCP pattern confirmed (verify chart)`, met: false },
+      { label: `Breakout volume > 2× avg (verify)`, met: false },
+    ]),
   };
 }
 

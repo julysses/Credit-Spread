@@ -43,6 +43,11 @@ interface TradeCardProps {
   conditions: string[];
   noTradeEvent?: NoTradeEvent;
   onAcceptTrade?: () => void;
+  // Hedge-fund clarity fields
+  thesis?: string;
+  entryLabel?: string;
+  exitLabel?: string;
+  stopLabel?: string;
 }
 
 function ChevronIcon({ className }: { className?: string }) {
@@ -100,6 +105,10 @@ export function TradeCard({
   conditions,
   noTradeEvent,
   onAcceptTrade,
+  thesis,
+  entryLabel,
+  exitLabel,
+  stopLabel,
 }: TradeCardProps) {
   const [expanded, setExpanded] = useState(true);
 
@@ -211,6 +220,42 @@ export function TradeCard({
           </div>
         </div>
       </div>
+
+      {/* Trade Brief — thesis + entry/exit/stop bar */}
+      {(thesis || entryLabel) && (
+        <div className="mt-4 mx-4 sm:mx-6 space-y-3">
+          {thesis && (
+            <div className="bg-sd-muted/30 border border-sd-line rounded-lg px-4 py-3">
+              <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em] mb-2 font-semibold">TRADE THESIS</div>
+              <p className="text-[12.5px] text-gray-300 leading-relaxed">{thesis}</p>
+            </div>
+          )}
+
+          {/* Entry / Exit / Stop 3-column bar */}
+          {(entryLabel || exitLabel || stopLabel) && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-3 text-center">
+                <div className="text-[10px] text-green-400 font-bold uppercase tracking-wider mb-1.5">ENTRY</div>
+                <div className="text-[11px] sm:text-xs font-mono text-white font-semibold leading-tight">
+                  {entryLabel ?? `$${credit.toFixed(2)} credit`}
+                </div>
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-3 py-3 text-center">
+                <div className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-1.5">TARGET (50%)</div>
+                <div className="text-[11px] sm:text-xs font-mono text-white font-semibold leading-tight">
+                  {exitLabel ?? `$${profitTarget.toFixed(2)} debit`}
+                </div>
+              </div>
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-3 text-center">
+                <div className="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-1.5">STOP (2×)</div>
+                <div className="text-[11px] sm:text-xs font-mono text-white font-semibold leading-tight">
+                  {stopLabel ?? `$${stopLoss.toFixed(2)} debit`}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Primary metrics row */}
       <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 border-t border-sd-line divide-x divide-sd-line">

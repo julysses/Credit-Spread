@@ -86,6 +86,14 @@ export interface TradeRecommendation {
   conditions: string[];          // Human readable trade rationale
   warnings: string[];
   confidence: 'high' | 'medium' | 'low';
+  // Hedge-fund clarity fields
+  thesis: string;                // 3-sentence: regime context + edge + risk management
+  entryPriceTarget: number;      // Net credit per share to collect at entry
+  exitPriceTarget: number;       // Debit level to close at for 50% profit
+  stopPriceTarget: number;       // Debit level to hard-stop at (2.2×)
+  entryLabel: string;            // "Collect $0.85 credit"
+  exitLabel: string;             // "Close at $0.42 debit (50% profit)"
+  stopLabel: string;             // "Exit at $1.87 debit (max loss)"
 }
 
 export interface StrategyDecision {
@@ -93,6 +101,45 @@ export interface StrategyDecision {
   rationale: string[];
   conditions: MarketConditions;
   recommendation: TradeRecommendation | null;
+}
+
+// ─────────────────────────────────────────────
+// Thesis Generator
+// ─────────────────────────────────────────────
+
+export function generateThesis(
+  strategy: StrategyType,
+  conditions: MarketConditions,
+  credit: number,
+  pop: number,
+  stopLoss: number,
+  tradeType: string
+): string {
+  const vixLabel =
+    conditions.vix < 15 ? 'low-volatility' :
+    conditions.vix < 20 ? 'moderate-volatility' :
+    conditions.vix < 25 ? 'elevated-volatility' : 'high-volatility';
+  const regimeLabel = conditions.marketRegime.replace(/_/g, '-');
+  const bias = conditions.directionalBias;
+
+  const sentence1 = `SPX is in a ${regimeLabel} regime with VIX at ${conditions.vix.toFixed(1)} (${vixLabel}), ${bias} directional bias, and IV Rank at ${conditions.ivRank.toFixed(0)}.`;
+
+  let sentence2 = '';
+  if (strategy === '90_PERCENT_FRAMEWORK') {
+    sentence2 = `The ${tradeType.replace(/_/g, ' ')} captures theta decay at ${(pop * 100).toFixed(0)}% probability of profit, placing strikes 1.2× expected move OTM where gamma exposure supports range compression.`;
+  } else if (strategy === 'MODERN_INCOME') {
+    sentence2 = `Elevated IV (${(conditions.impliedVol * 100).toFixed(0)}%) vs. realized vol (${(conditions.realizedVol * 100).toFixed(0)}%) creates a premium edge; the ${bias} bias aligns with a ${tradeType.replace(/_/g, ' ')}.`;
+  } else if (strategy === 'VOLATILITY_CRUSH') {
+    sentence2 = `SPX moved ${Math.abs(conditions.spxDailyChange).toFixed(1)}% triggering a vol spike — entering the 10:30 AM stabilization window to capture IV mean reversion via tight 0DTE spread.`;
+  } else {
+    sentence2 = 'Macro event risk or extreme VIX detected — standing aside per institutional SOP Rule 3 to preserve capital until conditions resolve.';
+  }
+
+  const sentence3 = credit > 0
+    ? `Entry collects $${(credit * 100).toFixed(0)}/contract; close at $${(credit * 0.5 * 100).toFixed(0)} debit for 50% profit or exit hard if debit exceeds $${(stopLoss * 100).toFixed(0)} (max risk).`
+    : 'Re-evaluate next session when macro catalyst resolves and volatility normalizes.';
+
+  return `${sentence1} ${sentence2} ${sentence3}`;
 }
 
 // ─────────────────────────────────────────────
@@ -288,9 +335,15 @@ export function constructSpread(
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + daysToExpiry);
 
+  const tradeTypeStr = spreadType === 'put' ? 'put_credit_spread' : 'call_credit_spread';
+  const thesis = generateThesis(strategy, conditions, credit, pop, stopLoss, tradeTypeStr);
+  const entryLabel = `Collect $${(credit * 100).toFixed(0)}/contract ($${credit.toFixed(2)}/share)`;
+  const exitLabel  = `Close at $${(profitTarget * 100).toFixed(0)} debit — 50% profit`;
+  const stopLabel  = `Exit at $${(stopLoss * 100).toFixed(0)} debit — max loss`;
+
   return {
     strategy,
-    tradeType: spreadType === 'put' ? 'put_credit_spread' : 'call_credit_spread',
+    tradeType: tradeTypeStr,
     shortLeg: {
       strike: shortStrike,
       optionType: spreadType,
@@ -324,6 +377,13 @@ export function constructSpread(
     conditions: conditionsList,
     warnings,
     confidence,
+    thesis,
+    entryPriceTarget: parseFloat(credit.toFixed(2)),
+    exitPriceTarget:  parseFloat(profitTarget.toFixed(2)),
+    stopPriceTarget:  parseFloat(stopLoss.toFixed(2)),
+    entryLabel,
+    exitLabel,
+    stopLabel,
   };
 }
 
@@ -375,6 +435,10 @@ function constructIronCondor(
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + daysToExpiry);
 
+  const icProfitTarget = parseFloat((totalCredit * 0.5).toFixed(2));
+  const icStopLoss     = parseFloat((totalCredit * 2.2).toFixed(2));
+  const icThesis = generateThesis('90_PERCENT_FRAMEWORK', conditions, totalCredit, pop, icStopLoss, 'iron_condor');
+
   return {
     strategy: '90_PERCENT_FRAMEWORK',
     tradeType: 'iron_condor',
@@ -390,8 +454,8 @@ function constructIronCondor(
     probOfTouch: parseFloat(Math.min(probabilityOfTouch(putShortBS.delta), probabilityOfTouch(callShortBS.delta)).toFixed(4)),
     expectedValue: parseFloat(ev.ev.toFixed(4)),
     kellySize: parseFloat(kelly.toFixed(4)),
-    profitTarget: parseFloat((totalCredit * 0.5).toFixed(2)),
-    stopLoss: parseFloat((totalCredit * 2.2).toFixed(2)),
+    profitTarget: icProfitTarget,
+    stopLoss: icStopLoss,
     daysToExpiry,
     expiryDate: expiry.toISOString().split('T')[0],
     conditions: [
@@ -401,10 +465,18 @@ function constructIronCondor(
     ],
     warnings: [],
     confidence: pop >= 0.85 ? 'high' : 'medium',
+    thesis: icThesis,
+    entryPriceTarget: parseFloat(totalCredit.toFixed(2)),
+    exitPriceTarget:  icProfitTarget,
+    stopPriceTarget:  icStopLoss,
+    entryLabel: `Collect $${(totalCredit * 100).toFixed(0)}/contract ($${totalCredit.toFixed(2)}/share)`,
+    exitLabel:  `Close at $${(icProfitTarget * 100).toFixed(0)} debit — 50% profit`,
+    stopLabel:  `Exit at $${(icStopLoss * 100).toFixed(0)} debit — max loss`,
   };
 }
 
 function buildNoTrade(conditions: MarketConditions): TradeRecommendation {
+  const noTradeThesis = generateThesis('NO_TRADE', conditions, 0, 0, 0, 'no_trade');
   return {
     strategy: 'NO_TRADE',
     tradeType: 'no_trade',
@@ -425,6 +497,13 @@ function buildNoTrade(conditions: MarketConditions): TradeRecommendation {
     conditions: ['Macro event day — standing aside per SOP Rule 3'],
     warnings: ['NO TRADE — macro event risk too high'],
     confidence: 'high',
+    thesis: noTradeThesis,
+    entryPriceTarget: 0,
+    exitPriceTarget: 0,
+    stopPriceTarget: 0,
+    entryLabel: 'No trade today',
+    exitLabel:  'Re-evaluate next session',
+    stopLabel:  'Capital preservation mode',
   };
 }
 

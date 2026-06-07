@@ -83,19 +83,47 @@ export function OptionsTradeCard({ plan }: OptionsTradeCardProps) {
               <DirIcon size={11} />
               {plan.direction.charAt(0).toUpperCase() + plan.direction.slice(1)}
             </span>
+            {/* Qualified badge if all conditions met */}
+            {plan.conditionStatus && plan.conditionStatus.length > 0 && plan.conditionStatus.every(c => c.met) && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border bg-green-500/10 border-green-600/30 text-green-400 font-bold">
+                ✓ QUALIFIED
+              </span>
+            )}
+            {plan.conditionStatus && plan.conditionStatus.length > 0 && !plan.conditionStatus.every(c => c.met) && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-800/60 border-gray-700 text-gray-500 font-medium">
+                {plan.conditionStatus.filter(c => c.met).length}/{plan.conditionStatus.length} conditions
+              </span>
+            )}
           </div>
           <p className="text-sm font-bold text-white">{plan.strategyName}</p>
+
+          {/* Entry / Exit / Stop quick bar */}
+          <div className="grid grid-cols-3 gap-1.5 mt-2">
+            <div className="bg-green-500/8 border border-green-500/20 rounded px-2 py-1.5 text-center">
+              <div className="text-[9px] text-green-400 font-bold uppercase tracking-wider mb-0.5">ENTRY</div>
+              <div className="text-[10px] font-mono text-white font-semibold leading-tight truncate">
+                {plan.entryLabel ?? (isCredit ? `$${plan.netCredit}/contract` : `$${plan.netDebit}/contract`)}
+              </div>
+            </div>
+            <div className="bg-blue-500/8 border border-blue-500/20 rounded px-2 py-1.5 text-center">
+              <div className="text-[9px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">TARGET</div>
+              <div className="text-[10px] font-mono text-white font-semibold leading-tight truncate">
+                {plan.exitLabel ?? `$${plan.profitTarget}/contract`}
+              </div>
+            </div>
+            <div className="bg-red-500/8 border border-red-500/20 rounded px-2 py-1.5 text-center">
+              <div className="text-[9px] text-red-400 font-bold uppercase tracking-wider mb-0.5">STOP</div>
+              <div className="text-[10px] font-mono text-white font-semibold leading-tight truncate">
+                {plan.stopLabel ?? `$${plan.stopLoss}/contract`}
+              </div>
+            </div>
+          </div>
 
           {/* Quick stats row */}
           <div className="flex flex-wrap gap-3 mt-1.5">
             <span className="text-[11px] text-gray-500 flex items-center gap-1">
               <Clock size={10} className="text-gray-600" />
               {plan.entryTimeWindow}
-            </span>
-            <span className={`text-[11px] font-mono font-semibold ${isCredit ? 'text-emerald-400' : 'text-orange-300'}`}>
-              {isCredit
-                ? `Credit: $${plan.netCredit?.toFixed(0)}/contract`
-                : `Debit: $${plan.netDebit?.toFixed(0)}/contract`}
             </span>
             <span className="text-[11px] text-gray-500">
               Max P: <span className="text-emerald-400 font-mono">${plan.maxProfit}</span>
@@ -113,6 +141,32 @@ export function OptionsTradeCard({ plan }: OptionsTradeCardProps) {
       {/* ── Expanded Detail ──────────────────────────────────────────────────── */}
       {open && (
         <div className="border-t border-gray-800 px-4 pb-4 pt-3 space-y-4">
+          {/* Trade Thesis */}
+          {plan.thesis && (
+            <div className="px-3 py-2.5 rounded-lg bg-sd-muted/30 border border-sd-line">
+              <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">TRADE THESIS</p>
+              <p className="text-xs text-gray-300 leading-relaxed">{plan.thesis}</p>
+            </div>
+          )}
+
+          {/* Condition status strip */}
+          {plan.conditionStatus && plan.conditionStatus.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-2">LIVE CONDITIONS</p>
+              <div className="flex flex-wrap gap-1.5">
+                {plan.conditionStatus.map((c, i) => (
+                  <span key={i} className={`text-[10px] px-2 py-1 rounded border font-medium ${
+                    c.met
+                      ? 'bg-green-500/10 border-green-600/30 text-green-400'
+                      : 'bg-red-500/10 border-red-600/30 text-red-400'
+                  }`}>
+                    {c.met ? '✓' : '✗'} {c.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Warnings */}
           {plan.warnings.length > 0 && (
             <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/8 border border-amber-500/25">

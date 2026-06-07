@@ -79,22 +79,35 @@ export function StockTradePlanCard({ candidate, onClose }: StockTradePlanCardPro
           </span>
         </div>
 
-        {/* ── Trade Plan ──────────────────────────────────────────────────── */}
-        <div className="border-t border-gray-800 pt-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Trade Plan</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Stat label="Entry" value={`$${tradePlan.entry.toFixed(2)}`} color="text-blue-300" />
-            <Stat label="Stop Loss" value={`$${tradePlan.stopLoss.toFixed(2)}`} color="text-red-400" />
-            <Stat label="Target 1" value={`$${tradePlan.target1.toFixed(2)}`} color="text-emerald-400" />
-            <Stat label="Target 2" value={`$${tradePlan.target2.toFixed(2)}`} color="text-emerald-300" />
-            <Stat label="Risk/Unit" value={`$${tradePlan.riskPerUnit.toFixed(2)}`} />
-            <Stat label="R:R Ratio" value={`${tradePlan.riskRewardRatio}:1`} color={tradePlan.riskRewardRatio >= 2 ? 'text-emerald-400' : 'text-yellow-400'} />
-          </div>
+        {/* ── Trade Thesis ────────────────────────────────────────────────── */}
+        <div className="rounded-lg bg-gray-800/40 border border-gray-700/50 p-3">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">TRADE THESIS</p>
+          <p className="text-xs text-gray-300 leading-relaxed">{tradePlan.explanation}</p>
         </div>
 
-        {/* ── Explanation ─────────────────────────────────────────────────── */}
-        <div className="rounded-lg bg-gray-800/40 p-3">
-          <p className="text-xs text-gray-400 leading-relaxed">{tradePlan.explanation}</p>
+        {/* ── Trade Plan ──────────────────────────────────────────────────── */}
+        <div className="border-t border-gray-800 pt-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entry / Exit / Stop</p>
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-2.5 text-center">
+              <div className="text-[9px] text-green-400 font-bold uppercase tracking-wider mb-1">ENTRY</div>
+              <div className="text-sm font-bold font-mono text-white">${tradePlan.entry.toFixed(2)}</div>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-2.5 text-center">
+              <div className="text-[9px] text-blue-400 font-bold uppercase tracking-wider mb-1">TARGET 1</div>
+              <div className="text-sm font-bold font-mono text-white">${tradePlan.target1.toFixed(2)}</div>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2.5 text-center">
+              <div className="text-[9px] text-red-400 font-bold uppercase tracking-wider mb-1">STOP</div>
+              <div className="text-sm font-bold font-mono text-white">${tradePlan.stopLoss.toFixed(2)}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Stat label="Target 2" value={`$${tradePlan.target2.toFixed(2)}`} color="text-emerald-300" />
+            <Stat label="R:R Ratio" value={`${tradePlan.riskRewardRatio}:1`} color={tradePlan.riskRewardRatio >= 2 ? 'text-emerald-400' : 'text-yellow-400'} />
+            <Stat label="Risk/Unit" value={`$${tradePlan.riskPerUnit.toFixed(2)}`} />
+            <Stat label="Direction" value={isLong ? 'LONG' : 'SHORT'} color={isLong ? 'text-emerald-400' : 'text-red-400'} />
+          </div>
         </div>
 
         {/* ── Invalidation ────────────────────────────────────────────────── */}

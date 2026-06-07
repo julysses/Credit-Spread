@@ -159,6 +159,9 @@ export default function DashboardPage() {
       />
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-8 py-6">
+        {/* ── Command Center Banner ── */}
+        <CommandCenterBanner strategy={state.strategy} conditions={conditions} />
+
         {state.error && (
           <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-red-400 text-sm">
             {state.error}
@@ -217,6 +220,10 @@ export default function DashboardPage() {
                     conditions={rec.conditions ?? []}
                     noTradeEvent={rec.noTradeEvent}
                     onAcceptTrade={handleAcceptTrade}
+                    thesis={rec.thesis}
+                    entryLabel={rec.entryLabel}
+                    exitLabel={rec.exitLabel}
+                    stopLabel={rec.stopLabel}
                   />
                 ) : (
                   <TradeCardSkeleton />
@@ -408,6 +415,83 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+// ── Command Center Banner ──────────────────────────────────────────────────
+function CommandCenterBanner({ strategy, conditions }: { strategy: any; conditions: any }) {
+  if (!strategy && !conditions) return null;
+
+  const rec = strategy?.decision?.recommendation;
+  const marketRegime: string = conditions?.marketRegime ?? 'range_bound';
+  const vixRegime: string    = conditions?.vixRegime ?? 'moderate';
+  const bias: string         = conditions?.directionalBias ?? 'neutral';
+  const tradeType: string    = rec?.tradeType ?? '';
+
+  // Regime color
+  const regimeColor =
+    marketRegime === 'trending_up'   ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' :
+    marketRegime === 'trending_down' ? 'bg-red-500/15 border-red-500/30 text-red-300' :
+    marketRegime === 'volatile'      ? 'bg-orange-500/15 border-orange-500/30 text-orange-300' :
+    marketRegime === 'crisis'        ? 'bg-red-600/20 border-red-600/40 text-red-200' :
+                                       'bg-yellow-500/10 border-yellow-500/20 text-yellow-300';
+
+  const vixColor =
+    vixRegime === 'low'      ? 'text-green-400' :
+    vixRegime === 'moderate' ? 'text-yellow-400' :
+    vixRegime === 'elevated' ? 'text-orange-400' : 'text-red-400';
+
+  const biasColor =
+    bias === 'bullish' ? 'text-emerald-400' :
+    bias === 'bearish' ? 'text-red-400' : 'text-gray-400';
+
+  const strategyLabel =
+    tradeType === 'no_trade'          ? '— No Trade Today' :
+    tradeType === 'iron_condor'       ? '✓ Iron Condor Active' :
+    tradeType === 'put_credit_spread' ? '✓ Put Credit Spread Active' :
+    tradeType === 'call_credit_spread'? '✓ Call Credit Spread Active' :
+    rec ? '✓ Strategy Active' : '— Loading…';
+
+  const stratColor = tradeType === 'no_trade' ? 'text-yellow-400' : rec ? 'text-green-400' : 'text-gray-500';
+
+  return (
+    <div className={`mb-4 rounded-lg border px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 ${regimeColor}`}>
+      <div className="flex items-center gap-2 text-xs font-semibold">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider font-normal">Regime</span>
+        <span className="capitalize font-bold">{marketRegime.replace(/_/g, ' ')}</span>
+      </div>
+      <div className="w-px h-4 bg-white/10 hidden sm:block" />
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider">VIX</span>
+        <span className={`font-bold font-mono ${vixColor}`}>{conditions?.vix?.toFixed(1) ?? '—'} <span className="font-normal text-gray-500">({vixRegime})</span></span>
+      </div>
+      <div className="w-px h-4 bg-white/10 hidden sm:block" />
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Bias</span>
+        <span className={`font-bold capitalize ${biasColor}`}>{bias}</span>
+      </div>
+      <div className="w-px h-4 bg-white/10 hidden sm:block" />
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Today</span>
+        <span className={`font-semibold ${stratColor}`}>{strategyLabel}</span>
+      </div>
+      {rec && rec.tradeType !== 'no_trade' && rec.entryLabel && (
+        <>
+          <div className="w-px h-4 bg-white/10 hidden md:block" />
+          <div className="hidden md:flex items-center gap-3 text-[10px] font-mono">
+            <span className="bg-green-500/10 border border-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
+              ENTRY {rec.entryLabel}
+            </span>
+            <span className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+              TARGET {rec.exitLabel}
+            </span>
+            <span className="bg-red-500/10 border border-red-500/20 text-red-400 px-1.5 py-0.5 rounded">
+              STOP {rec.stopLabel}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
