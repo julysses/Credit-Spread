@@ -36,6 +36,23 @@ interface StockDossierModalProps {
   onClose: () => void;
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as UnknownRecord
+    : undefined;
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(num) ? num : undefined;
+}
+
 export function StockDossierModal({ candidate, onClose }: StockDossierModalProps) {
   const [dossier, setDossier] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,29 +72,35 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
 
   if (!candidate) return null;
 
-  const aiMemo = (dossier?.aiMemo as string) ?? candidate.aiThesis ?? null;
-  const bullCase  = dossier?.bullCase  as string | undefined;
-  const bearCase  = dossier?.bearCase  as string | undefined;
-  const entryStrategy = dossier?.entryStrategy as string | undefined;
-  const targetRange   = dossier?.targetPriceRange as string | undefined;
-  const conviction    = dossier?.convictionLevel as string | undefined;
+  const aiLayer = asRecord(dossier?.layer8_aiMemo);
+  const aiMemo = asString(dossier?.aiMemo) ?? asString(aiLayer?.fullMemo) ?? candidate.aiThesis ?? null;
+  const bullCase  = asString(dossier?.bullCase) ?? asString(aiLayer?.bullCase);
+  const bearCase  = asString(dossier?.bearCase) ?? asString(aiLayer?.bearCase);
+  const entryStrategy = asString(dossier?.entryStrategy) ?? asString(aiLayer?.entryStrategy);
+  const targetRange   = asString(dossier?.targetPriceRange) ?? asString(aiLayer?.targetPriceRange);
+  const conviction    = asString(dossier?.convictionLevel) ?? asString(aiLayer?.convictionLevel);
 
-  const fundamentalsData  = dossier?.fundamentalsData  as Record<string, unknown> | undefined;
-  const valuationData     = dossier?.valuationData     as Record<string, unknown> | undefined;
-  const newsData          = (dossier?.newsData ?? dossier?.layer3_news) as Record<string, unknown> | undefined;
-  const institutionalData = dossier?.institutionalData as Record<string, unknown> | undefined;
-  const optionsData       = dossier?.optionsData       as Record<string, unknown> | undefined;
-  const technicalsData    = dossier?.technicalsData    as Record<string, unknown> | undefined;
-  const sectorData        = dossier?.sectorData        as Record<string, unknown> | undefined;
+  const fundamentalsData  = asRecord(dossier?.fundamentalsData) ?? asRecord(dossier?.layer1_fundamentals);
+  const valuationData     = asRecord(dossier?.valuationData) ?? asRecord(dossier?.layer2_valuation);
+  const newsData          = asRecord(dossier?.newsData) ?? asRecord(dossier?.layer3_news);
+  const institutionalData = asRecord(dossier?.institutionalData) ?? asRecord(dossier?.layer4_institutional);
+  const optionsData       = asRecord(dossier?.optionsData) ?? asRecord(dossier?.layer5_options);
+  const technicalsData    = asRecord(dossier?.technicalsData) ?? asRecord(dossier?.layer6_technicals);
+  const sectorData        = asRecord(dossier?.sectorData) ?? asRecord(dossier?.layer7_sector);
 
   const priceChange = parseFloat(candidate.priceChangePct ?? '0');
   const rsi = parseFloat(candidate.rsi ?? '50');
   const convictionColor = conviction === 'High' ? 'text-green-400' : conviction === 'Speculative' ? 'text-yellow-400' : 'text-blue-400';
-  const newsHeadlines = Array.isArray(newsData?.headlines)
-    ? newsData.headlines.filter((headline): headline is string => typeof headline === 'string')
-    : undefined;
-  const newsSentiment = typeof newsData?.sentiment === 'string' ? newsData.sentiment : undefined;
-  const nextEarnings = typeof newsData?.nextEarnings === 'string' ? newsData.nextEarnings : undefined;
+  const rawHeadlines = Array.isArray(newsData?.headlines)
+    ? newsData.headlines
+    : Array.isArray(newsData?.recentHeadlines)
+    ? newsData.recentHeadlines
+    : [];
+  const newsHeadlines = rawHeadlines
+    .map(headline => typeof headline === 'string' ? headline : asString(asRecord(headline)?.headline))
+    .filter((headline): headline is string => Boolean(headline));
+  const newsSentiment = asString(newsData?.sentiment) ?? asString(newsData?.overallSentiment);
+  const nextEarnings = asString(newsData?.nextEarnings) ?? asString(fundamentalsData?.nextEarningsDate);
 
   const LAYERS: DossierLayer[] = [
     {
@@ -88,11 +111,11 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
           'Revenue Growth YoY': `${candidate.revenueGrowthPct ?? '--'}%`,
           'EPS Growth YoY':     `${candidate.epsGrowthPct ?? '--'}%`,
           'PEG Ratio':          candidate.pegRatio ?? '--',
-          'Gross Margin':       fundamentalsData ? `${((fundamentalsData.grossMargin as number) ?? 0).toFixed(1)}%` : '--',
-          'Operating Margin':   fundamentalsData ? `${((fundamentalsData.operatingMargin as number) ?? 0).toFixed(1)}%` : '--',
-          'Net Margin':         fundamentalsData ? `${((fundamentalsData.netMargin as number) ?? 0).toFixed(1)}%` : '--',
-          'FCF Margin':         fundamentalsData ? `${((fundamentalsData.fcfMargin as number) ?? 0).toFixed(1)}%` : '--',
-          'ROE':                fundamentalsData ? `${((fundamentalsData.roe as number) ?? 0).toFixed(1)}%` : '--',
+          'Gross Margin':       fundamentalsData ? `${(asNumber(fundamentalsData.grossMargin) ?? 0).toFixed(1)}%` : '--',
+          'Operating Margin':   fundamentalsData ? `${(asNumber(fundamentalsData.operatingMargin) ?? 0).toFixed(1)}%` : '--',
+          'Net Margin':         fundamentalsData ? `${(asNumber(fundamentalsData.netMargin) ?? 0).toFixed(1)}%` : '--',
+          'FCF Margin':         fundamentalsData ? `${(asNumber(fundamentalsData.fcfMargin) ?? 0).toFixed(1)}%` : '--',
+          'ROE':                fundamentalsData ? `${(asNumber(fundamentalsData.roe) ?? 0).toFixed(1)}%` : '--',
         }} />
       ),
     },
@@ -101,14 +124,14 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
       icon: '💰',
       content: (
         <LayerGrid data={{
-          'P/E Ratio':          valuationData ? (valuationData.peRatio as number)?.toFixed(1) : '--',
-          'Forward P/E':        valuationData ? (valuationData.forwardPe as number)?.toFixed(1) : '--',
-          'P/S Ratio':          valuationData ? (valuationData.psRatio as number)?.toFixed(1) : '--',
-          'EV/EBITDA':          valuationData ? (valuationData.evEbitda as number)?.toFixed(1) : '--',
-          'DCF Upside':         valuationData ? `${((valuationData.dcfImpliedUpside as number) ?? 0).toFixed(1)}%` : '--',
-          'Analyst Target':     valuationData ? `$${((valuationData.analystTargetPrice as number) ?? 0).toFixed(0)}` : '--',
-          'Implied Upside':     valuationData ? `${((valuationData.impliedUpside as number) ?? 0).toFixed(1)}%` : '--',
-          'Sector P/E':         valuationData ? (valuationData.sectorPE as number)?.toFixed(1) : '--',
+          'P/E Ratio':          valuationData ? asNumber(valuationData.peRatio)?.toFixed(1) : '--',
+          'Forward P/E':        valuationData ? asNumber(valuationData.forwardPe)?.toFixed(1) : '--',
+          'P/S Ratio':          valuationData ? asNumber(valuationData.psRatio)?.toFixed(1) : '--',
+          'EV/EBITDA':          valuationData ? asNumber(valuationData.evEbitda)?.toFixed(1) : '--',
+          'DCF Upside':         valuationData ? `${(asNumber(valuationData.dcfImpliedUpside) ?? asNumber(valuationData.impliedUpside) ?? 0).toFixed(1)}%` : '--',
+          'Analyst Target':     valuationData ? `$${(asNumber(valuationData.analystTargetPrice) ?? 0).toFixed(0)}` : '--',
+          'Implied Upside':     valuationData ? `${(asNumber(valuationData.impliedUpside) ?? 0).toFixed(1)}%` : '--',
+          'Sector P/E':         valuationData ? asNumber(valuationData.sectorPE)?.toFixed(1) : '--',
         }} />
       ),
     },
@@ -144,14 +167,14 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
       icon: '🏦',
       content: (
         <LayerGrid data={{
-          'Inst. Ownership':    institutionalData ? `${((institutionalData.institutionalOwnershipPct as number) ?? 0).toFixed(1)}%` : '--',
-          'HF Net Change (QoQ)': institutionalData ? `${((institutionalData.hfNetShareChangePct as number) ?? 0).toFixed(1)}%` : '--',
-          'Insider Net 90d':    institutionalData ? `$${(((institutionalData.insiderNetBuyDollars90d as number) ?? 0) / 1000).toFixed(0)}K` : '--',
-          'Short Float':        institutionalData ? `${((institutionalData.shortFloatPct as number) ?? 0).toFixed(1)}%` : '--',
-          'Days to Cover':      institutionalData ? `${((institutionalData.shortRatioDaysToCover as number) ?? 0).toFixed(1)}d` : '--',
-          'Piotroski Score':    institutionalData ? (institutionalData.piotroskiScore as number)?.toString() : '--',
-          'Altman Z-Score':     institutionalData ? (institutionalData.altmanZScore as number)?.toFixed(2) : '--',
-          'Congress Buys':      institutionalData ? (institutionalData.congressBuys as number)?.toString() : '0',
+          'Inst. Ownership':    institutionalData ? `${(asNumber(institutionalData.institutionalOwnershipPct) ?? 0).toFixed(1)}%` : '--',
+          'HF Net Change (QoQ)': institutionalData ? `${(asNumber(institutionalData.hfNetShareChangePct) ?? 0).toFixed(1)}%` : '--',
+          'Insider Net 90d':    institutionalData ? `$${((asNumber(institutionalData.insiderNetBuyDollars90d) ?? 0) / 1000).toFixed(0)}K` : '--',
+          'Short Float':        institutionalData ? `${(asNumber(institutionalData.shortFloatPct) ?? 0).toFixed(1)}%` : '--',
+          'Days to Cover':      institutionalData ? `${(asNumber(institutionalData.shortRatioDaysToCover) ?? 0).toFixed(1)}d` : '--',
+          'Piotroski Score':    institutionalData ? asNumber(institutionalData.piotroskiScore)?.toString() : '--',
+          'Altman Z-Score':     institutionalData ? asNumber(institutionalData.altmanZScore)?.toFixed(2) : '--',
+          'Congress Buys':      institutionalData ? asNumber(institutionalData.congressBuys)?.toString() : '0',
         }} />
       ),
     },
@@ -160,12 +183,12 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
       icon: '🔥',
       content: (
         <LayerGrid data={{
-          'IV Rank':            optionsData ? `${((optionsData.ivRank as number) ?? 0).toFixed(0)}%` : '--',
-          'Put/Call OI':        optionsData ? (optionsData.putCallOiRatio as number)?.toFixed(2) : '--',
-          'Put/Call Vol':       optionsData ? (optionsData.putCallVolumeRatio as number)?.toFixed(2) : '--',
-          'Unusual Flow':       optionsData ? ((optionsData.unusualFlowFlag as boolean) ? '⚡ Yes' : 'No') : '--',
-          'Implied Move':       optionsData ? `${((optionsData.impliedMoveEarnings as number) ?? 0).toFixed(1)}%` : '--',
-          'Flow Score':         candidate.optionsFlowScore?.toString() ?? '--',
+          'IV Rank':            optionsData ? `${(asNumber(optionsData.ivRank) ?? 0).toFixed(0)}%` : '--',
+          'Put/Call OI':        optionsData ? asNumber(optionsData.putCallOiRatio)?.toFixed(2) : '--',
+          'Put/Call Vol':       optionsData ? asNumber(optionsData.putCallVolumeRatio)?.toFixed(2) : '--',
+          'Unusual Flow':       optionsData ? (optionsData.unusualFlowFlag === true || (asNumber(optionsData.unusualCallCount) ?? 0) + (asNumber(optionsData.unusualPutCount) ?? 0) > 0 ? '⚡ Yes' : 'No') : '--',
+          'Implied Move':       optionsData ? `${(asNumber(optionsData.impliedMoveEarnings) ?? 0).toFixed(1)}%` : '--',
+          'Flow Score':         (asNumber(optionsData?.flowScore) ?? candidate.optionsFlowScore)?.toString() ?? '--',
         }} />
       ),
     },
@@ -176,10 +199,10 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
         <LayerGrid data={{
           'RSI(14)':            `${rsi.toFixed(1)}`,
           'vs 200 SMA':         candidate.above200sma ? '✅ Above' : '❌ Below',
-          'MACD':               technicalsData ? (technicalsData.macdBullish as boolean) ? '✅ Bullish' : '⚠️ Bearish' : '--',
-          'Volume Ratio':       technicalsData ? `${((technicalsData.volumeRatio as number) ?? 1).toFixed(2)}×` : '--',
-          'RS vs SPY 1M':       technicalsData ? `${((technicalsData.relStrengthVsSpy1m as number) ?? 0).toFixed(1)}%` : '--',
-          'Dist from 52w High': technicalsData ? `${((technicalsData.distFromHigh52w as number) ?? 0).toFixed(1)}%` : '--',
+          'MACD':               technicalsData ? asString(technicalsData.macdStatus) ?? (technicalsData.macdBullish === true ? '✅ Bullish' : '⚠️ Bearish') : '--',
+          'Volume Ratio':       technicalsData ? `${(asNumber(technicalsData.volumeRatio) ?? 1).toFixed(2)}×` : '--',
+          'RS vs SPY 1M':       technicalsData ? `${(asNumber(technicalsData.relStrengthVsSpy1m) ?? 0).toFixed(1)}%` : '--',
+          'Dist from 52w High': technicalsData ? `${(asNumber(technicalsData.distFromHigh52w) ?? asNumber(technicalsData.distFrom52wHighPct) ?? 0).toFixed(1)}%` : '--',
         }} />
       ),
     },
@@ -188,12 +211,12 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
       icon: '🌐',
       content: (
         <LayerGrid data={{
-          'Sector':             candidate.sector ?? '--',
-          'Sector 1d':          sectorData ? `${((sectorData.sectorChangePct as number) ?? 0).toFixed(2)}%` : '--',
-          'Sector P/E':         sectorData ? (sectorData.sectorPE as number)?.toFixed(1) : '--',
-          'Stock vs Sector P/E': sectorData ? (sectorData.stockVsSectorPE as string) : '--',
-          'M&A Signal':         sectorData ? ((sectorData.maSignal as boolean) ? '⚡ Active' : 'None') : '--',
-          'Congress Activity':  sectorData ? ((sectorData.congressSignal as boolean) ? '🏛️ Buying' : 'None') : '--',
+          'Sector':             asString(sectorData?.sectorName) ?? candidate.sector ?? '--',
+          'Sector 1d':          sectorData ? `${(asNumber(sectorData.sectorChangePct) ?? asNumber(sectorData.sectorMomentum1m) ?? 0).toFixed(2)}%` : '--',
+          'Sector P/E':         sectorData ? asNumber(sectorData.sectorPE)?.toFixed(1) : '--',
+          'Stock vs Sector P/E': sectorData ? asString(sectorData.stockVsSectorPE) ?? '--' : '--',
+          'M&A Signal':         sectorData ? (sectorData.maSignal === true ? '⚡ Active' : 'None') : '--',
+          'Congress Activity':  sectorData ? (sectorData.congressSignal === true ? '🏛️ Buying' : 'None') : '--',
         }} />
       ),
     },

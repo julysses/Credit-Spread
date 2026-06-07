@@ -20,3 +20,10 @@
 - gstack `/browse` could not be used because the local resolver reports `browse binary not found`; hosted verification will use direct HTTP checks unless the binary is installed.
 - Pushed commit `d3a5cde`; GitHub reported Vercel deployment success.
 - Hosted production checks returned `200 OK` for `https://credit-spread.vercel.app`, `/api/market`, `/api/growth/screener`, and `/api/growth/dossier/NVDA`.
+
+## Follow-up: Growth Dossier Stats
+
+- [x] Identify why stats render as `--`.
+- [x] Update modal to support layered Growth dossier API fields.
+- [x] Build and verify dossier stats locally.
+- [ ] Commit, push, and verify Vercel deployment.
