@@ -12,7 +12,7 @@ const MCSchema = z.object({
   spotPrice: z.number().positive(),
   impliedVolatility: z.number().positive(),
   drift: z.number().default(0),
-  daysToExpiry: z.number().int().positive(),
+  daysToExpiry: z.number().positive(),
   numSimulations: z.number().int().min(1000).max(50000).default(10000),
   shortStrike: z.number().optional(),
   longStrike: z.number().optional(),

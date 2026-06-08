@@ -46,6 +46,7 @@ export interface MarketDataSnapshot {
   optionChain: OptionChainEntry[];
   fetchedAt: number;
   isMarketOpen: boolean;
+  sources?: Record<string, string>;
 }
 
 // ─────────────────────────────────────────────
@@ -442,8 +443,10 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     timestamp: Date.now(),
   };
 
-  const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MD' : yahooData.get('SPY') ? 'Yahoo' : 'AV';
-  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSource ? (spxRaw?.price ? 'MD' : 'Yahoo') : 'derived'} VIX=${vixSource ? (vixRaw?.price ? 'MD' : 'Yahoo') : 'fallback'} SPY=${spySource}`);
+  const spxSourceLabel = spxSource ? (spxRaw?.price ? 'MarketData' : 'Yahoo delayed') : 'SPY-derived synthetic estimate';
+  const vixSourceLabel = vixSource ? (vixRaw?.price ? 'MarketData' : 'Yahoo delayed') : (optionChain.length > 0 ? 'option-chain derived estimate' : 'hardcoded fallback 18');
+  const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MarketData' : yahooData.get('SPY') ? 'Yahoo delayed' : 'Alpha Vantage delayed';
+  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSourceLabel} VIX=${vixSourceLabel} SPY=${spySource}`);
 
   return {
     spx: spxQuote,
@@ -452,6 +455,12 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     optionChain,
     fetchedAt: Date.now(),
     isMarketOpen: isMarketOpen(),
+    sources: {
+      spx: spxSourceLabel,
+      vix: vixSourceLabel,
+      spy: spySource,
+      optionChain: optionChain.length > 0 ? 'MarketData' : 'missing fallback',
+    },
   };
 }
 
@@ -498,5 +507,12 @@ export function getMockMarketData(): MarketDataSnapshot {
     optionChain: chain,
     fetchedAt: Date.now(),
     isMarketOpen: isMarketOpen(),
+    sources: {
+      spx: 'mock',
+      spy: 'mock',
+      vix: 'mock',
+      optionChain: 'mock',
+      realizedVol: 'mock',
+    },
   };
 }

@@ -4,6 +4,7 @@ import { analyzeNews, getMockNewsAnalysis } from '@/server/news-analyzer';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
 import { classifyVIXRegime, computeVolatilitySkew, buildVolatilitySurface } from '@/lib/models/volatility';
 import { expectedMove } from '@/lib/models/black-scholes';
+import { buildDataQuality } from '@/lib/models/risk-controls';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +20,13 @@ export async function GET(req: NextRequest) {
       : await analyzeNews();
 
     const { spx, vix } = snapshot;
+    const dataQuality = buildDataQuality(snapshot.sources ?? {}, useMock);
     const impliedVol = vix.price / 100;
-    const realizedVol = impliedVol * 0.85; // synthetic RV estimate
+    const realizedVol = impliedVol * 0.85; // synthetic RV estimate until historical realized-vol source is wired
+    if (!snapshot.sources?.realizedVol) {
+      dataQuality.warnings.push('REALIZEDVOL source is synthetic estimate');
+      if (dataQuality.confidence === 'live') dataQuality.confidence = 'synthetic';
+    }
 
     // Build surface from chain
     const riskFreeRate = 0.05;
@@ -84,6 +90,8 @@ export async function GET(req: NextRequest) {
       realizedVol,
       impliedVol,
       skew,
+      dataConfidence: dataQuality.confidence,
+      dataWarnings: dataQuality.warnings,
     };
 
     const decision = runStrategyEngine(conditions);
@@ -112,7 +120,8 @@ export async function GET(req: NextRequest) {
           spxLow: spx.low,
           spxOpen: spx.open,
         },
-        snapshot: { isMarketOpen: snapshot.isMarketOpen },
+        snapshot: { isMarketOpen: snapshot.isMarketOpen, sources: snapshot.sources },
+        dataQuality,
       },
       timestamp: Date.now(),
     });

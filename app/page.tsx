@@ -114,6 +114,8 @@ export default function DashboardPage() {
           optionType:  rec.shortLeg?.optionType,
           contracts:   1,
           openCredit:  rec.credit,
+          maxLoss:     rec.maxLoss,
+          recommendationSnapshot: state.strategy?.audit ?? rec,
           expiryDate:  rec.expiryDate,
         }),
       });
@@ -156,6 +158,7 @@ export default function DashboardPage() {
         onTabChange={setTab}
         onRefresh={fetchAll}
         isLoading={state.loading}
+        dataConfidence={conditions?.dataConfidence ?? state.strategy?.dataQuality?.confidence ?? 'live'}
       />
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-8 py-6">
@@ -207,6 +210,11 @@ export default function DashboardPage() {
                     probOfProfit={rec.probOfProfit ?? 0}
                     probOfTouch={rec.probOfTouch ?? 0}
                     expectedValue={rec.expectedValue ?? 0}
+                    decisionStatus={rec.decisionStatus}
+                    dataConfidence={rec.dataConfidence}
+                    creditToWidth={rec.creditToWidth}
+                    breakeven={rec.breakeven}
+                    exitPlan={rec.exitPlan}
                     kellySize={rec.kellySize ?? 0}
                     profitTarget={rec.profitTarget ?? 0}
                     stopLoss={rec.stopLoss ?? 0}

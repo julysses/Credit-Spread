@@ -17,6 +17,8 @@ const TradeSchema = z.object({
   contracts: z.number().int().positive().default(1),
   openCredit: z.number().positive(),
   expiryDate: z.string(),
+  maxLoss: z.number().optional(),
+  recommendationSnapshot: z.unknown().optional(),
   notes: z.string().optional(),
 });
 
@@ -45,7 +47,11 @@ export async function GET() {
           totalPnl,
           winRate,
           openExposure: openTrades.reduce(
-            (a, t) => a + (t.openCredit ?? 0) * (t.contracts ?? 1) * 100,
+            (a, t) => {
+              const width = Math.abs((t.longStrike ?? 0) - (t.shortStrike ?? 0));
+              const maxLoss = Math.max(width - (t.openCredit ?? 0), 0) * (t.contracts ?? 1) * 100;
+              return a + maxLoss;
+            },
             0
           ),
         },
@@ -82,7 +88,8 @@ export async function POST(req: NextRequest) {
         contracts: input.contracts,
         openCredit: input.openCredit,
         expiryDate: input.expiryDate,
-        notes: input.notes,
+        notes: input.notes ?? (input.recommendationSnapshot ? JSON.stringify({ recommendationSnapshot: input.recommendationSnapshot }) : undefined),
+        tags: input.maxLoss ? { maxLoss: input.maxLoss } : undefined,
         status: 'open',
       })
       .returning();

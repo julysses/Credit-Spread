@@ -33,6 +33,18 @@ interface TradeCardProps {
   probOfProfit: number;
   probOfTouch: number;
   expectedValue: number;
+  decisionStatus?: 'trade_approved' | 'watch_only' | 'no_trade' | 'data_invalid';
+  dataConfidence?: string;
+  creditToWidth?: number;
+  breakeven?: number;
+  exitPlan?: {
+    profitTarget: string;
+    stopLoss: string;
+    technicalStop: string;
+    timeStop: string;
+    eventStop: string;
+    invalidation: string;
+  };
   kellySize: number;
   profitTarget: number;
   stopLoss: number;
@@ -89,7 +101,13 @@ export function TradeCard({
   maxProfit,
   maxLoss,
   probOfProfit,
+  probOfTouch,
   expectedValue,
+  decisionStatus,
+  dataConfidence,
+  creditToWidth,
+  breakeven,
+  exitPlan,
   kellySize,
   profitTarget,
   stopLoss,
@@ -170,6 +188,9 @@ export function TradeCard({
   const tradeName = strategyLabel(strategy).toUpperCase();
   const bias = tradeType.includes('put') ? 'NEUTRAL → BULLISH' : tradeType.includes('call') ? 'NEUTRAL → BEARISH' : 'NEUTRAL';
   const expLabel = daysToExpiry === 0 ? 'INTRADAY' : `${daysToExpiry} DTE · Exp ${expiryDate}`;
+  const statusLabel = decisionStatus === 'trade_approved' ? 'TRADE APPROVED' : decisionStatus === 'data_invalid' ? 'DATA INVALID' : decisionStatus === 'watch_only' ? 'WATCH ONLY' : 'NO TRADE';
+  const statusVariant = decisionStatus === 'trade_approved' ? 'success' : decisionStatus === 'data_invalid' ? 'danger' : decisionStatus === 'watch_only' ? 'warning' : 'outline';
+  const dataVariant = dataConfidence === 'live' ? 'success' : dataConfidence === 'invalid' || dataConfidence === 'mock' ? 'danger' : 'warning';
 
   const legs = [
     ...(shortLeg ? [{ action: 'SELL', type: shortLeg.optionType.toUpperCase(), strike: shortLeg.strike, delta: shortLeg.delta, px: shortLeg.premium }] : []),
@@ -190,8 +211,8 @@ export function TradeCard({
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              <Badge variant="accent">SIGNAL ACTIVE</Badge>
-              <Badge variant="success">ACTIVE</Badge>
+              <Badge variant={statusVariant}>{statusLabel}</Badge>
+              <Badge variant={dataVariant}>DATA · {(dataConfidence ?? 'LIVE').toUpperCase()}</Badge>
               <Badge variant="outline" className="hidden sm:inline-flex">{expLabel}</Badge>
             </div>
             <h2 className="text-xl sm:text-3xl font-bold tracking-tight text-gray-100 leading-tight">{tradeName}</h2>
@@ -214,11 +235,11 @@ export function TradeCard({
 
       {/* Primary metrics row */}
       <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 border-t border-sd-line divide-x divide-sd-line">
-        <NumCell label="PROB. OF PROFIT" value={`${pop}%`} sub={pop >= 70 ? 'Strong edge' : 'Moderate'} tone={popTone} />
-        <NumCell label="EXPECTED VALUE" value={`$${expectedValue.toFixed(2)}`} sub="per spread" tone={evTone} />
-        <NumCell label="KELLY SIZE" value={`${(kellySize * 100).toFixed(1)}%`} sub="of NLV" tone="text-gray-100" />
+        <NumCell label="PROB. OF PROFIT" value={`${pop}%`} sub={`Touch ${(probOfTouch * 100).toFixed(0)}%`} tone={popTone} />
+        <NumCell label="EXPECTED VALUE" value={`$${expectedValue.toFixed(2)}`} sub="model EV per spread" tone={evTone} />
+        <NumCell label="CREDIT / WIDTH" value={`${((creditToWidth ?? 0) * 100).toFixed(1)}%`} sub={breakeven ? `BE ${breakeven.toFixed(0)}` : 'payoff quality'} tone={(creditToWidth ?? 0) >= 0.12 ? 'text-green-400' : 'text-yellow-400'} />
         <NumCell label="MAX WIN" value={`$${maxProfit.toFixed(0)}`} sub={`Credit $${credit.toFixed(2)}`} tone="text-green-400" />
-        <NumCell label="MAX LOSS" value={`−$${maxLoss.toFixed(0)}`} sub="per spread" tone="text-red-400" />
+        <NumCell label="MAX LOSS" value={`−$${maxLoss.toFixed(0)}`} sub="true risk per spread" tone="text-red-400" />
       </div>
 
       {/* Structure */}
@@ -287,17 +308,17 @@ export function TradeCard({
           <div className="px-4 sm:px-6 py-5 border-t border-sd-line">
             <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em] mb-3">EXIT RULES</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg px-4 py-3">
-                <div className="text-[10px] text-green-400 font-semibold uppercase tracking-wider mb-1">✓ Profit Target</div>
-                <div className="slab text-base text-white">Close at ${profitTarget.toFixed(2)}</div>
-                <div className="text-[10px] text-gray-500 font-mono mt-0.5">50% of credit received</div>
-              </div>
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
-                <div className="text-[10px] text-red-400 font-semibold uppercase tracking-wider mb-1">✗ Stop Loss</div>
-                <div className="slab text-base text-white">Exit at ${stopLoss.toFixed(2)}</div>
-                <div className="text-[10px] text-gray-500 font-mono mt-0.5">2× credit (max risk)</div>
-              </div>
+              <ExitRule tone="green" title="Profit Target" text={exitPlan?.profitTarget ?? `Buy back near $${profitTarget.toFixed(2)}`} />
+              <ExitRule tone="red" title="Stop Loss" text={exitPlan?.stopLoss ?? `Exit near $${stopLoss.toFixed(2)}`} />
+              <ExitRule tone="yellow" title="Technical Stop" text={exitPlan?.technicalStop ?? 'Exit if price violates the short strike thesis.'} />
+              <ExitRule tone="blue" title="Time / Event Stop" text={`${exitPlan?.timeStop ?? 'Reassess before close.'} ${exitPlan?.eventStop ?? ''}`} />
             </div>
+            {exitPlan?.invalidation && (
+              <div className="mt-3 text-[12px] text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-4 py-3">
+                <span className="font-semibold uppercase tracking-wider text-[10px] block mb-1">Invalidation</span>
+                {exitPlan.invalidation}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -321,6 +342,21 @@ export function TradeCard({
         </div>
       </div>
     </Card>
+  );
+}
+
+function ExitRule({ tone, title, text }: { tone: 'green' | 'red' | 'yellow' | 'blue'; title: string; text: string }) {
+  const styles = {
+    green: 'bg-green-500/10 border-green-500/20 text-green-400',
+    red: 'bg-red-500/10 border-red-500/20 text-red-400',
+    yellow: 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400',
+    blue: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
+  }[tone];
+  return (
+    <div className={`border rounded-lg px-4 py-3 ${styles}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wider mb-1">{title}</div>
+      <div className="text-[12px] text-gray-200 leading-relaxed">{text}</div>
+    </div>
   );
 }
 

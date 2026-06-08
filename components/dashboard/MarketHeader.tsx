@@ -29,6 +29,7 @@ interface MarketHeaderProps {
   onTabChange: (tab: DashTab) => void;
   onRefresh?: () => void;
   isLoading?: boolean;
+  dataConfidence?: string;
 }
 
 function vixColorClass(v: number) {
@@ -77,6 +78,7 @@ export function MarketHeader({
   onTabChange,
   onRefresh,
   isLoading,
+  dataConfidence = 'live',
 }: MarketHeaderProps) {
   const [spxLive, spxDir] = useLiveTick(spxPrice || 5823, 0.00025, 1500);
   const [spyLive, spyDir] = useLiveTick((spxPrice || 5823) * 0.0998, 0.00025, 1700);
@@ -100,6 +102,9 @@ export function MarketHeader({
   const regimeVariant: 'success' | 'danger' | 'info' =
     regimeLabel === 'RISK-ON' ? 'success' :
     regimeLabel === 'RISK-OFF' ? 'danger' : 'info';
+  const dataVariant: 'success' | 'warning' | 'danger' =
+    dataConfidence === 'live' ? 'success' :
+    dataConfidence === 'invalid' || dataConfidence === 'mock' ? 'danger' : 'warning';
 
   return (
     <header className="sticky top-0 z-30 bg-bg/90 backdrop-blur-md border-b border-sd-line">
@@ -176,6 +181,9 @@ export function MarketHeader({
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <Badge variant={regimeVariant} className="hidden sm:inline-flex tracking-[0.16em]">
             REGIME · {regimeLabel}
+          </Badge>
+          <Badge variant={dataVariant} className="hidden md:inline-flex tracking-[0.16em]">
+            DATA · {dataConfidence.toUpperCase()}
           </Badge>
           <Badge variant={isMarketOpen ? 'success' : 'outline'} className="tracking-[0.16em]">
             <span className={`w-1.5 h-1.5 rounded-full inline-block ${isMarketOpen ? 'bg-green-400 live-dot' : 'bg-gray-500'}`} />
