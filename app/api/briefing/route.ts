@@ -4,6 +4,7 @@ import { getMockNewsAnalysis, analyzeNews } from '@/server/news-analyzer';
 import { generateMorningBrief } from '@/server/ai-briefing';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
 import { classifyVIXRegime } from '@/lib/models/volatility';
+import { fetchEconomicCalendar } from '@/server/finnhub';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,18 @@ export async function GET() {
     const impliedVol = vix.price / 100;
     const ivRankValue = Math.min(100, Math.max(0, (vix.price - 12) / (40 - 12) * 100));
 
+    // Check for high-impact US economic events today or tomorrow
+    let isMacroEventDay = false;
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const econEvents = await fetchEconomicCalendar();
+      isMacroEventDay = econEvents.some(
+        e => e.country === 'US' && e.impact === 'high' &&
+          (e.time.startsWith(today) || e.time.startsWith(tomorrow))
+      );
+    } catch { /* fall through — default false */ }
+
     const conditions: MarketConditions = {
       spxPrice: spx.price,
       spyPrice: snapshot.spy.price,
@@ -30,7 +43,7 @@ export async function GET() {
       directionalBias: 'neutral',
       marketRegime: 'range_bound',
       riskLevel: 'moderate',
-      isMacroEventDay: false,
+      isMacroEventDay,
       isExpiry: false,
       timeOfDay: 1000,
       spxDailyChange: spx.changePct || 0,

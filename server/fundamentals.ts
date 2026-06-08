@@ -6,6 +6,10 @@
  */
 
 import axios from 'axios';
+import {
+  fetchEarningsCalendar,
+  fetchAnalystEstimates as fetchFinnhubEstimates,
+} from './finnhub';
 
 const FMP_BASE = 'https://financialmodelingprep.com/api/v3';
 const AV_BASE  = 'https://www.alphavantage.co/query';
@@ -137,11 +141,21 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsDat
     const analystTarget   = safeNum(p.dcf ?? targetPriceMean, currentPrice * 1.1);
     const impliedUpside   = currentPrice > 0 ? parseFloat(((analystTarget - currentPrice) / currentPrice * 100).toFixed(1)) : 0;
 
-    // Next earnings
+    // Next earnings — use Finnhub calendar when available, fall back to +90d approximation
     let nextEarningsDate: string | null = null;
     let daysToEarnings: number | null = null;
-    if (surpPcts.length > 0 && (surprises[0] as Record<string, unknown>).date) {
-      // Approximate: add ~90 days to last earnings date
+    try {
+      const calendar = await fetchEarningsCalendar();
+      const today = new Date().toISOString().split('T')[0];
+      const entry = calendar.find(e => e.symbol === symbol && e.date >= today);
+      if (entry) {
+        nextEarningsDate = entry.date;
+        const diff = Math.ceil((new Date(entry.date).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+        daysToEarnings = diff > 0 && diff <= 90 ? diff : null;
+      }
+    } catch { /* ignore */ }
+
+    if (!nextEarningsDate && surpPcts.length > 0 && (surprises[0] as Record<string, unknown>).date) {
       const lastEarnings = new Date((surprises[0] as Record<string, unknown>).date as string);
       const nextEarnings = new Date(lastEarnings.getTime() + 90 * 24 * 60 * 60 * 1000);
       nextEarningsDate = nextEarnings.toISOString().split('T')[0];
@@ -312,6 +326,9 @@ export async function fetchAnalystEstimates(symbol: string): Promise<AnalystEsti
     const priceTarget = await fmpGet<Record<string, unknown>[]>(`price-target-summary/${symbol}`);
     const pt = Array.isArray(priceTarget) && priceTarget[0] ? priceTarget[0] as Record<string, unknown> : {};
 
+    // FMP free tier omits forward estimates — supplement with Finnhub
+    const finnhubEst = await fetchFinnhubEstimates(symbol).catch(() => null);
+
     return {
       symbol,
       consensusRating,
@@ -319,8 +336,8 @@ export async function fetchAnalystEstimates(symbol: string): Promise<AnalystEsti
       targetPriceHigh:       safeNum(pt.targetHigh),
       targetPriceLow:        safeNum(pt.targetLow),
       numberOfAnalysts:      safeNum(pt.numberOfAnalysts),
-      revenueEstimateNextQ:  0,
-      epsEstimateNextQ:      0,
+      revenueEstimateNextQ:  finnhubEst?.revenueAvg ?? 0,
+      epsEstimateNextQ:      finnhubEst?.epsAvg ?? 0,
     };
   } catch {
     return getMockAnalystEstimates(symbol);

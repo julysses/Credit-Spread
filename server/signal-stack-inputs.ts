@@ -19,6 +19,7 @@
 
 import axios from 'axios';
 import { fetchMarketSnapshot } from './market-data';
+import { fetchEconomicCalendar } from './finnhub';
 import type { OptionChainEntry } from './market-data';
 
 // ─── Return type ─────────────────────────────────────────────────────────────
@@ -39,6 +40,8 @@ export interface SignalStackMarketInputs {
   vvixLevel: number | null;
   pcrValue: number | null;
   fetchedAt: number;
+  /** High-impact US economic events in the next 7 days (e.g. FOMC, CPI, NFP) */
+  upcomingMacroEvents: string[];
   /** Per-source fetch status for the UI badge/tooltip */
   sources: Record<string, 'ok' | 'error'>;
 }
@@ -195,6 +198,7 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
     vvixSpotResult,
     breadthSpotResult,
     hyResult,
+    econResult,
   ] = await Promise.allSettled([
     fetchMarketSnapshot(),          // SPX, VIX, options chain
     yahooHistory('^GSPC', '1y'),    // SPX 200-day SMA
@@ -205,6 +209,7 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
     yahooSpot('^VVIX'),             // VVIX
     yahooSpot('^SPXA200R'),         // Breadth % above 200 SMA
     fetchHYSpread(),                // HY OAS from FRED
+    fetchEconomicCalendar(),        // Upcoming high-impact US macro events (Finnhub)
   ]);
 
   // ── SPX price, VIX, GEX, P/C ratio ─────────────────────────────────────────
@@ -333,6 +338,22 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
     sources.hy = 'error';
   }
 
+  // ── Upcoming macro events ───────────────────────────────────────────────────
+  let upcomingMacroEvents: string[] = [];
+  if (econResult.status === 'fulfilled' && econResult.value.length > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    upcomingMacroEvents = econResult.value
+      .filter(e => e.country === 'US' && e.impact === 'high' && e.time >= today)
+      .map(e => {
+        const date = e.time.split(' ')[0];
+        return `${e.event} (${date})`;
+      })
+      .slice(0, 5);
+    if (upcomingMacroEvents.length > 0) sources.macroCalendar = 'ok';
+  } else {
+    sources.macroCalendar = 'error';
+  }
+
   return {
     spxPrice,
     vixLevel,
@@ -349,6 +370,7 @@ export async function fetchSignalStackInputs(): Promise<SignalStackMarketInputs>
     vvixLevel,
     pcrValue,
     fetchedAt: Date.now(),
+    upcomingMacroEvents,
     sources,
   };
 }

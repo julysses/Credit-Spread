@@ -5,6 +5,7 @@ import { fetchFundamentals } from '@/server/fundamentals';
 import { fetchInstitutionalData } from '@/server/institutional';
 import { fetchSecCompanyFacts, fetchSecCompanyProfile, scoreSecSignals } from '@/server/sec/sec-client';
 import { fetchPoliticianSignal } from '@/server/politicians/politician-signals';
+import { fetchRecommendationTrends, fetchNewsSentiment } from '@/server/finnhub';
 import type { ConvictionPick } from './conviction-types';
 
 interface CandidateInput {
@@ -53,12 +54,14 @@ async function loadUniverse(limit: number): Promise<CandidateInput[]> {
 
 export async function buildConvictionPick(symbol: string, candidate?: CandidateInput): Promise<ConvictionPick> {
   const upper = symbol.toUpperCase();
-  const [fundamentals, institutional, secProfileResult, secFactsResult, politician] = await Promise.allSettled([
+  const [fundamentals, institutional, secProfileResult, secFactsResult, politician, recTrends, newsSentiment] = await Promise.allSettled([
     fetchFundamentals(upper),
     fetchInstitutionalData(upper),
     fetchSecCompanyProfile(upper),
     fetchSecCompanyFacts(upper),
     fetchPoliticianSignal(upper),
+    fetchRecommendationTrends(upper),
+    fetchNewsSentiment(upper),
   ]);
 
   const fd = fundamentals.status === 'fulfilled' ? fundamentals.value : null;
@@ -68,19 +71,39 @@ export async function buildConvictionPick(symbol: string, candidate?: CandidateI
   const pol = politician.status === 'fulfilled' ? politician.value : null;
   const sec = scoreSecSignals(secProfile, secFacts);
 
+  // Analyst recommendation trend (most recent month — Finnhub)
+  let analystTrendScore = 50;
+  const recs = recTrends.status === 'fulfilled' ? recTrends.value : [];
+  if (recs.length > 0) {
+    const latest = recs[0];
+    const total = latest.strongBuy + latest.buy + latest.hold + latest.sell + latest.strongSell || 1;
+    analystTrendScore = Math.round(((latest.strongBuy + latest.buy) / total) * 100);
+  }
+
+  // Finnhub news sentiment (bullish % 0–100)
+  const fhSentiment = newsSentiment.status === 'fulfilled' ? newsSentiment.value : null;
+  const newsBullishScore = fhSentiment?.sentiment
+    ? Math.round(fhSentiment.sentiment.bullishPercent * 100)
+    : null;
+
   const growth = num(candidate?.growthScore, Math.min(100, 50 + num(fd?.revenueGrowthYoy) * 0.8 + num(fd?.epsGrowthYoy) * 0.4));
   const value = num(candidate?.valueScore, fd?.pegRatio && fd.pegRatio > 0 ? Math.max(20, 85 - fd.pegRatio * 12) : 50);
   const fundamentalsScore = Math.max(0, Math.min(100, Math.round(growth * 0.65 + value * 0.35)));
   const technicalScore = Math.max(0, Math.min(100, Math.round(num(candidate?.momentumScore, 50 + (candidate?.above200sma ? 12 : 0) + num(candidate?.priceChangePct) * 2))));
   const institutionalScore = Math.max(0, Math.min(100, Math.round(num(candidate?.institutionalScore, inst ? inst.institutionalScore * 4 : 50))));
   const politicianScore = pol?.score ?? 50;
-  const newsScore = 50 + (sec.catalysts.length * 6) - (sec.risks.length * 7);
+  const secNewsScore = 50 + (sec.catalysts.length * 6) - (sec.risks.length * 7);
+  // Blend SEC-derived news signal with Finnhub sentiment when available
+  const newsScore = newsBullishScore !== null
+    ? Math.round(secNewsScore * 0.5 + newsBullishScore * 0.5)
+    : secNewsScore;
 
   let convictionScore =
     fundamentalsScore * 0.25 +
     sec.score * 0.20 +
     politicianScore * 0.15 +
-    newsScore * 0.15 +
+    newsScore * 0.10 +
+    analystTrendScore * 0.05 +
     technicalScore * 0.15 +
     institutionalScore * 0.10;
 
@@ -118,6 +141,7 @@ export async function buildConvictionPick(symbol: string, candidate?: CandidateI
       news: Math.max(0, Math.min(100, Math.round(newsScore))),
       technical: technicalScore,
       institutional: institutionalScore,
+      analystTrend: analystTrendScore,
     },
     bullCase,
     bearCase,

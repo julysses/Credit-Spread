@@ -13,6 +13,7 @@ export interface ConvictionPick {
     news: number;
     technical: number;
     institutional: number;
+    analystTrend?: number;
   };
   bullCase: string[];
   bearCase: string[];

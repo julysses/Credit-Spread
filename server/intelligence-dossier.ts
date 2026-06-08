@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import { analyzeNewsForSymbol } from './news-analyzer';
 import type { FundamentalsData, InsiderData, AnalystEstimatesData } from './fundamentals';
 import type { StockFlowSummary } from './options-flow';
 import type { InstitutionalData } from './institutional';
@@ -74,55 +75,29 @@ export interface IntelligenceDossier {
 // ─── News Layer Builder ───────────────────────────────────────────────────────
 
 async function buildNewsLayer(symbol: string, companyName: string): Promise<NewsLayer> {
-  const headlines: NewsLayer['recentHeadlines'] = [];
-  const catalysts: string[] = [];
+  const { headlines, overallSentiment } = await analyzeNewsForSymbol(symbol, companyName);
 
-  // Try GNews
-  if (process.env.GNEWS_API_KEY) {
-    try {
-      const resp = await axios.get('https://gnews.io/api/v4/search', {
-        params: {
-          q: `"${symbol}" OR "${companyName}"`,
-          lang: 'en',
-          country: 'us',
-          max: 5,
-          apikey: process.env.GNEWS_API_KEY,
-        },
-        timeout: 8000,
-      });
-      const articles = resp.data?.articles ?? [];
-      for (const a of articles) {
-        const text = (a.title + ' ' + (a.description ?? '')).toLowerCase();
-        const sentiment: 'positive' | 'negative' | 'neutral' =
-          /beat|surge|rally|upgrade|record|growth|profit/.test(text) ? 'positive' :
-          /miss|fall|decline|downgrade|loss|warning|cut/.test(text) ? 'negative' : 'neutral';
-        headlines.push({
-          headline: a.title,
-          sentiment,
-          source: a.source?.name ?? 'GNews',
-          publishedAt: a.publishedAt ?? '',
-        });
-        // Extract catalysts
-        if (/earnings|guidance|fda|merger|acquisition|buyback|dividend/.test(text)) {
-          const catalyst =
-            /earnings/.test(text) ? 'Earnings announcement' :
-            /guidance/.test(text) ? 'Guidance update' :
-            /fda/.test(text) ? 'FDA decision' :
-            /merger|acquisition/.test(text) ? 'M&A activity' :
-            /buyback/.test(text) ? 'Share buyback' : 'Corporate event';
-          if (!catalysts.includes(catalyst)) catalysts.push(catalyst);
-        }
-      }
-    } catch { /* silent */ }
+  // Detect catalyst keywords in headlines
+  const catalysts: string[] = [];
+  for (const item of headlines) {
+    const text = (item.headline).toLowerCase();
+    if (/earnings|guidance|fda|merger|acquisition|buyback|dividend/.test(text)) {
+      const catalyst =
+        /earnings/.test(text) ? 'Earnings announcement' :
+        /guidance/.test(text) ? 'Guidance update' :
+        /fda/.test(text) ? 'FDA decision' :
+        /merger|acquisition/.test(text) ? 'M&A activity' :
+        /buyback/.test(text) ? 'Share buyback' : 'Corporate event';
+      if (!catalysts.includes(catalyst)) catalysts.push(catalyst);
+    }
   }
 
-  const positiveCount = headlines.filter(h => h.sentiment === 'positive').length;
-  const negativeCount = headlines.filter(h => h.sentiment === 'negative').length;
-  const overallSentiment: NewsLayer['overallSentiment'] =
-    positiveCount > negativeCount ? 'bullish' :
-    negativeCount > positiveCount ? 'bearish' : 'neutral';
-
-  return { recentHeadlines: headlines, overallSentiment, catalystEvents: catalysts, macroAlignment: '' };
+  return {
+    recentHeadlines: headlines,
+    overallSentiment,
+    catalystEvents: catalysts,
+    macroAlignment: '',
+  };
 }
 
 // ─── Technicals Layer Builder ─────────────────────────────────────────────────

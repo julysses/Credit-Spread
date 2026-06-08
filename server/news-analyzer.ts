@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { fetchMarketNews, fetchCompanyNews, fetchNewsSentiment } from './finnhub';
 
 export interface NewsItem {
   id: string;
@@ -192,6 +193,24 @@ async function fetchFromAlphaVantage(): Promise<Partial<NewsItem>[]> {
 }
 
 /**
+ * Fetch general market news from Finnhub
+ */
+async function fetchFromFinnhub(): Promise<Partial<NewsItem>[]> {
+  try {
+    const articles = await fetchMarketNews('general');
+    return articles.map(a => ({
+      publishedAt: new Date(a.datetime * 1000).toISOString(),
+      source: a.source || 'Finnhub',
+      headline: a.headline,
+      summary: a.summary,
+      url: a.url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Fetch news from NewsAPI
  */
 async function fetchFromNewsAPI(): Promise<Partial<NewsItem>[]> {
@@ -261,15 +280,16 @@ export function processNewsItems(rawItems: Partial<NewsItem>[]): NewsItem[] {
  */
 export async function analyzeNews(): Promise<NewsAnalysis> {
   // Fetch from all sources in parallel, merge, and deduplicate by headline
-  const [gnewsItems, newsApiItems, alphaVantageItems] = await Promise.all([
+  const [gnewsItems, newsApiItems, alphaVantageItems, finnhubItems] = await Promise.all([
     fetchFromGNews(),
     fetchFromNewsAPI(),
     fetchFromAlphaVantage(),
+    fetchFromFinnhub(),
   ]);
 
   const seen = new Set<string>();
   const rawItems: Partial<NewsItem>[] = [];
-  for (const item of [...gnewsItems, ...newsApiItems, ...alphaVantageItems]) {
+  for (const item of [...gnewsItems, ...newsApiItems, ...alphaVantageItems, ...finnhubItems]) {
     const key = (item.headline || '').toLowerCase().slice(0, 60);
     if (key && !seen.has(key)) {
       seen.add(key);
@@ -324,6 +344,91 @@ export async function analyzeNews(): Promise<NewsAnalysis> {
     macroRiskLevel,
     keyRisks,
     tradeabilityScore: Math.max(0, Math.min(100, tradeabilityScore)),
+  };
+}
+
+/**
+ * Symbol-specific news analysis using Finnhub company news (primary) + GNews (fallback).
+ * Returns headlines with sentiment labels and an overall sentiment for the stock.
+ */
+export async function analyzeNewsForSymbol(
+  symbol: string,
+  companyName: string
+): Promise<{ headlines: { headline: string; sentiment: 'positive' | 'negative' | 'neutral'; source: string; publishedAt: string }[]; overallSentiment: 'bullish' | 'bearish' | 'neutral'; bullishPercent: number }> {
+  const rawItems: Partial<NewsItem>[] = [];
+
+  // Primary: Finnhub company news (last 7 days)
+  try {
+    const to = new Date().toISOString().split('T')[0];
+    const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const articles = await fetchCompanyNews(symbol, from, to);
+    for (const a of articles.slice(0, 8)) {
+      rawItems.push({
+        publishedAt: new Date(a.datetime * 1000).toISOString(),
+        source: a.source || 'Finnhub',
+        headline: a.headline,
+        summary: a.summary,
+        url: a.url,
+      });
+    }
+  } catch { /* ignore */ }
+
+  // Fallback: GNews symbol-specific query
+  if (rawItems.length < 3 && process.env.GNEWS_API_KEY) {
+    try {
+      const resp = await axios.get('https://gnews.io/api/v4/search', {
+        params: {
+          q: `"${symbol}" OR "${companyName}"`,
+          lang: 'en',
+          country: 'us',
+          max: 5,
+          apikey: process.env.GNEWS_API_KEY,
+        },
+        timeout: 8000,
+      });
+      for (const a of (resp.data?.articles ?? [])) {
+        rawItems.push({
+          publishedAt: a.publishedAt ?? new Date().toISOString(),
+          source: a.source?.name ?? 'GNews',
+          headline: a.title ?? '',
+          summary: a.description ?? '',
+          url: a.url ?? '',
+        });
+      }
+    } catch { /* ignore */ }
+  }
+
+  const items = processNewsItems(rawItems);
+
+  // Blend with Finnhub pre-computed sentiment score if available
+  let bullishPercent = 0.5;
+  try {
+    const fhSentiment = await fetchNewsSentiment(symbol);
+    if (fhSentiment?.sentiment) {
+      bullishPercent = fhSentiment.sentiment.bullishPercent;
+    } else if (items.length > 0) {
+      const pos = items.filter(i => i.sentiment === 'positive').length;
+      bullishPercent = pos / items.length;
+    }
+  } catch {
+    if (items.length > 0) {
+      bullishPercent = items.filter(i => i.sentiment === 'positive').length / items.length;
+    }
+  }
+
+  const overallSentiment: 'bullish' | 'bearish' | 'neutral' =
+    bullishPercent >= 0.6 ? 'bullish' :
+    bullishPercent <= 0.35 ? 'bearish' : 'neutral';
+
+  return {
+    headlines: items.slice(0, 6).map(i => ({
+      headline: i.headline,
+      sentiment: i.sentiment,
+      source: i.source,
+      publishedAt: i.publishedAt,
+    })),
+    overallSentiment,
+    bullishPercent: parseFloat(bullishPercent.toFixed(2)),
   };
 }
 

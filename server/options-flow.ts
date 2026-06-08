@@ -6,6 +6,7 @@
  */
 
 import axios from 'axios';
+import { fetchEarningsCalendar } from './finnhub';
 
 const MD_BASE = 'https://api.marketdata.app/v1';
 
@@ -208,6 +209,32 @@ export async function analyzeOptionsFlow(symbol: string): Promise<StockFlowSumma
       unusualCallCount > unusualPutCount ? 'bullish' :
       unusualPutCount  > unusualCallCount ? 'bearish' : 'neutral';
 
+    // Implied earnings move: ATM straddle / strike at the expiry covering earnings
+    let impliedMoveEarnings = 0;
+    try {
+      const calendar = await fetchEarningsCalendar();
+      const today = new Date().toISOString().split('T')[0];
+      const entry = calendar.find(e => e.symbol === symbol && e.date >= today);
+      if (entry && chain.length > 0) {
+        const earningsDate = entry.date;
+        const expiries = [...new Set(chain.map(q => q.expiration))].sort();
+        const targetExpiry = expiries.find(exp => exp >= earningsDate) ?? expiries[expiries.length - 1];
+        const expiryChain = chain.filter(q => q.expiration === targetExpiry);
+        const calls = expiryChain.filter(q => q.side === 'call');
+        const puts  = expiryChain.filter(q => q.side === 'put');
+        if (calls.length > 0 && puts.length > 0) {
+          const atmCall = calls.reduce((best, q) =>
+            Math.abs(q.delta - 0.5) < Math.abs(best.delta - 0.5) ? q : best
+          );
+          const atmPut = puts.find(q => q.strike === atmCall.strike);
+          if (atmPut && atmCall.strike > 0) {
+            const straddle = ((atmCall.bid + atmCall.ask) / 2) + ((atmPut.bid + atmPut.ask) / 2);
+            impliedMoveEarnings = parseFloat((straddle / atmCall.strike * 100).toFixed(1));
+          }
+        }
+      }
+    } catch { /* ignore — non-critical */ }
+
     return {
       symbol,
       flowScore,
@@ -218,7 +245,7 @@ export async function analyzeOptionsFlow(symbol: string): Promise<StockFlowSumma
       putCallOiRatio,
       ivRank:              parseFloat(ivRank.toFixed(1)),
       ivPercentile:        parseFloat(ivRank.toFixed(1)),
-      impliedMoveEarnings: 0, // would need earnings date + near-term straddle price
+      impliedMoveEarnings,
       alerts,
     };
   } catch (err) {
