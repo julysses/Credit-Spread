@@ -46,6 +46,7 @@ export interface MarketDataSnapshot {
   optionChain: OptionChainEntry[];
   fetchedAt: number;
   isMarketOpen: boolean;
+  realizedVol?: number;         // 20-day annualized HV (0-1 decimal, e.g. 0.14 = 14%)
   sources?: Record<string, string>;
 }
 
@@ -293,6 +294,120 @@ async function fetchAlphaVantageQuote(symbol: string): Promise<MarketQuote | nul
 }
 
 // ─────────────────────────────────────────────
+// Realized Volatility (20-day HV, annualized)
+// Primary: Yahoo Finance daily history (free, no auth)
+// ─────────────────────────────────────────────
+
+/**
+ * Fetch 20-day historical realized volatility for SPX.
+ * Uses Yahoo Finance /v8/finance/chart for daily closes (2-month range).
+ * Computes: stddev of daily log returns × √252
+ * Returns null if fetch fails or insufficient data.
+ */
+export async function fetchRealizedVol(): Promise<{ rv: number; source: string } | null> {
+  try {
+    const resp = await axios.get(
+      'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC',
+      {
+        params: { range: '2mo', interval: '1d', includePrePost: 'false' },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 7000,
+      }
+    );
+
+    const closes: number[] = resp.data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+    const valid = closes.filter((c) => c != null && isFinite(c) && c > 0);
+
+    if (valid.length < 22) {
+      console.warn(`fetchRealizedVol: insufficient data (${valid.length} closes)`);
+      return null;
+    }
+
+    // Use most recent 21 closes → 20 log-return pairs
+    const recent = valid.slice(-21);
+    const logReturns: number[] = [];
+    for (let i = 1; i < recent.length; i++) {
+      logReturns.push(Math.log(recent[i] / recent[i - 1]));
+    }
+
+    const mean = logReturns.reduce((s, r) => s + r, 0) / logReturns.length;
+    const variance = logReturns.reduce((s, r) => s + (r - mean) ** 2, 0) / logReturns.length;
+    const hv20 = parseFloat((Math.sqrt(variance * 252)).toFixed(4));
+
+    console.log(`fetchRealizedVol: 20-day HV = ${(hv20 * 100).toFixed(2)}% (Yahoo Finance)`);
+    return { rv: hv20, source: 'Yahoo Finance (20-day HV)' };
+  } catch (err) {
+    console.error('fetchRealizedVol failed:', (err as Error).message);
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Option Chain Liquidity Filter
+// Strips strikes with poor bid-ask quality or negligible OI
+// ─────────────────────────────────────────────
+
+/**
+ * Liquidity thresholds for SPX options.
+ * SPX options are among the most liquid in the world; these are
+ * intentionally conservative to catch truly illiquid entries.
+ */
+const LIQUIDITY = {
+  minPutOI: 10,                   // minimum open interest per side
+  minCallOI: 10,
+  maxSpreadPct: 0.30,             // max (ask - bid) / mid for either side
+  minMid: 0.05,                   // ignore near-zero premium entries
+} as const;
+
+function calcMid(bid: number, ask: number): number {
+  return (bid + ask) / 2;
+}
+
+function isLiquidPut(entry: OptionChainEntry): boolean {
+  const mid = calcMid(entry.putBid, entry.putAsk);
+  if (mid < LIQUIDITY.minMid) return false;
+  if (entry.putOI < LIQUIDITY.minPutOI) return false;
+  const spread = entry.putAsk - entry.putBid;
+  return spread / mid <= LIQUIDITY.maxSpreadPct;
+}
+
+function isLiquidCall(entry: OptionChainEntry): boolean {
+  const mid = calcMid(entry.callBid, entry.callAsk);
+  if (mid < LIQUIDITY.minMid) return false;
+  if (entry.callOI < LIQUIDITY.minCallOI) return false;
+  const spread = entry.callAsk - entry.callBid;
+  return spread / mid <= LIQUIDITY.maxSpreadPct;
+}
+
+/**
+ * Filter the raw option chain to only retain strikes where at least one
+ * side (call or put) passes liquidity checks.  Entries where both sides
+ * are illiquid / zero are removed from the surface and skew calculations.
+ * Returns the filtered list and a quality label.
+ */
+export function filterLiquidChain(
+  chain: OptionChainEntry[]
+): { filtered: OptionChainEntry[]; quality: 'good' | 'thin' | 'missing' } {
+  if (chain.length === 0) return { filtered: [], quality: 'missing' };
+
+  const filtered = chain.filter((e) => isLiquidPut(e) || isLiquidCall(e));
+  const pct = filtered.length / chain.length;
+
+  const quality: 'good' | 'thin' | 'missing' =
+    filtered.length === 0 ? 'missing' : pct >= 0.5 ? 'good' : 'thin';
+
+  if (quality !== 'good') {
+    console.warn(`filterLiquidChain: ${quality} — ${filtered.length}/${chain.length} strikes passed`);
+  }
+
+  return { filtered, quality };
+}
+
+// ─────────────────────────────────────────────
 // Market Status
 // ─────────────────────────────────────────────
 
@@ -327,14 +442,18 @@ export function getNextExpiry(daysOut: number = 7): string {
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const expiry = getNextExpiry(7);
 
-  // Fetch MarketData.app (indices + options chain) and Alpaca SPY snapshot in parallel
-  const [spxRaw, vixRaw, spyRaw, optionChain, alpacaSnaps] = await Promise.all([
+  // Fetch MarketData.app (indices + options chain), Alpaca SPY, and realized vol in parallel
+  const [spxRaw, vixRaw, spyRaw, rawOptionChain, alpacaSnaps, rvResult] = await Promise.all([
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
     fetchMDStockQuote('SPY'),
     fetchMDOptionChain('SPX', expiry),
     alpacaConfigured() ? fetchAlpacaSnapshots(['SPY']) : Promise.resolve(new Map()),
+    fetchRealizedVol(),
   ]);
+
+  // Apply liquidity filter to option chain
+  const { filtered: optionChain, quality: chainQuality } = filterLiquidChain(rawOptionChain);
 
   // Alpaca SPY — most reliable real-time source for stock quotes
   const alpacaSpy = alpacaSnaps.get('SPY');
@@ -446,7 +565,8 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const spxSourceLabel = spxSource ? (spxRaw?.price ? 'MarketData' : 'Yahoo delayed') : 'SPY-derived synthetic estimate';
   const vixSourceLabel = vixSource ? (vixRaw?.price ? 'MarketData' : 'Yahoo delayed') : (optionChain.length > 0 ? 'option-chain derived estimate' : 'hardcoded fallback 18');
   const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MarketData' : yahooData.get('SPY') ? 'Yahoo delayed' : 'Alpha Vantage delayed';
-  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSourceLabel} VIX=${vixSourceLabel} SPY=${spySource}`);
+  const rvSource = rvResult ? rvResult.source : 'synthetic (IV × 0.85)';
+  console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSourceLabel} VIX=${vixSourceLabel} SPY=${spySource} RV=${rvSource} chain=${chainQuality}`);
 
   return {
     spx: spxQuote,
@@ -455,11 +575,14 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     optionChain,
     fetchedAt: Date.now(),
     isMarketOpen: isMarketOpen(),
+    realizedVol: rvResult?.rv,
     sources: {
       spx: spxSourceLabel,
       vix: vixSourceLabel,
       spy: spySource,
-      optionChain: optionChain.length > 0 ? 'MarketData' : 'missing fallback',
+      optionChain: optionChain.length > 0 ? `MarketData (${chainQuality})` : 'missing fallback',
+      optionChainLiquidity: chainQuality,
+      realizedVol: rvSource,
     },
   };
 }

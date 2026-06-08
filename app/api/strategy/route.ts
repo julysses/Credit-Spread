@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshot, getMockMarketData, type OptionChainEntry } from '@/server/market-data';
 import { analyzeNews, getMockNewsAnalysis } from '@/server/news-analyzer';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
 import { classifyVIXRegime, computeVolatilitySkew, buildVolatilitySurface } from '@/lib/models/volatility';
@@ -22,9 +22,12 @@ export async function GET(req: NextRequest) {
     const { spx, vix } = snapshot;
     const dataQuality = buildDataQuality(snapshot.sources ?? {}, useMock);
     const impliedVol = vix.price / 100;
-    const realizedVol = impliedVol * 0.85; // synthetic RV estimate until historical realized-vol source is wired
-    if (!snapshot.sources?.realizedVol) {
-      dataQuality.warnings.push('REALIZEDVOL source is synthetic estimate');
+
+    // Realized vol: use fetched 20-day HV when available; fall back to synthetic IV×0.85 estimate
+    const isSyntheticRV = !snapshot.realizedVol;
+    const realizedVol = snapshot.realizedVol ?? impliedVol * 0.85;
+    if (isSyntheticRV) {
+      dataQuality.warnings.push('REALIZEDVOL source is synthetic estimate (IV × 0.85)');
       if (dataQuality.confidence === 'live') dataQuality.confidence = 'synthetic';
     }
 
@@ -96,6 +99,37 @@ export async function GET(req: NextRequest) {
 
     const decision = runStrategyEngine(conditions);
 
+    // ── Chain liquidity spot-check ──────────────────────────────────────────
+    // After computing the recommended strikes, validate them against actual
+    // chain data (bid-ask quality, open interest).  Append warnings to the
+    // decision object so the UI can surface them without blocking the trade.
+    if (
+      decision.recommendation &&
+      decision.recommendation.tradeType !== 'no_trade' &&
+      snapshot.optionChain.length > 0
+    ) {
+      const chainWarnings = checkStrikeLiquidity(
+        snapshot.optionChain,
+        decision.recommendation.shortLeg?.strike ?? null,
+        decision.recommendation.longLeg?.strike ?? null,
+        decision.recommendation.shortLeg?.optionType ?? 'put',
+      );
+      if (chainWarnings.length > 0) {
+        decision.recommendation.warnings = [
+          ...(decision.recommendation.warnings ?? []),
+          ...chainWarnings,
+        ];
+      }
+    }
+    // Chain liquidity label in dataQuality
+    const chainLiqLabel = snapshot.sources?.optionChainLiquidity;
+    if (chainLiqLabel === 'thin') {
+      dataQuality.warnings.push('Option chain liquidity is thin — bid-ask spreads elevated');
+    } else if (chainLiqLabel === 'missing') {
+      dataQuality.warnings.push('Option chain data missing — strike liquidity unverified');
+    }
+    // ───────────────────────────────────────────────────────────────────────
+
     // If standing aside, attach the specific event that triggered it
     if (decision.recommendation?.tradeType === 'no_trade' && conditions.isMacroEventDay) {
       const macroEvent = detectMacroEvent(newsAnalysis);
@@ -120,7 +154,7 @@ export async function GET(req: NextRequest) {
           spxLow: spx.low,
           spxOpen: spx.open,
         },
-        snapshot: { isMarketOpen: snapshot.isMarketOpen, sources: snapshot.sources },
+        snapshot: { isMarketOpen: snapshot.isMarketOpen, sources: snapshot.sources, realizedVol: snapshot.realizedVol },
         dataQuality,
       },
       timestamp: Date.now(),
@@ -220,4 +254,48 @@ function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: st
   const scheduledTime = extractScheduledTime(text);
 
   return { name, description, scheduledTime, sources };
+}
+
+/**
+ * Spot-check liquidity at the short and long strike levels in the actual
+ * option chain.  Returns human-readable warning strings — empty array if OK.
+ */
+function checkStrikeLiquidity(
+  chain: OptionChainEntry[],
+  shortStrike: number | null,
+  longStrike: number | null,
+  side: 'call' | 'put',
+): string[] {
+  const warnings: string[] = [];
+
+  for (const strike of [shortStrike, longStrike]) {
+    if (strike == null) continue;
+
+    // Find nearest chain entry within a 2.5-point window
+    const entry = chain.reduce<OptionChainEntry | null>((best, e) => {
+      const d = Math.abs(e.strike - strike);
+      if (d > 2.5) return best;
+      return best == null || d < Math.abs(best.strike - strike) ? e : best;
+    }, null);
+
+    if (!entry) {
+      warnings.push(`Strike ${strike} not found in live chain — spread not verifiable`);
+      continue;
+    }
+
+    const bid  = side === 'put' ? entry.putBid  : entry.callBid;
+    const ask  = side === 'put' ? entry.putAsk  : entry.callAsk;
+    const oi   = side === 'put' ? entry.putOI   : entry.callOI;
+    const mid  = (bid + ask) / 2;
+    const spreadPct = mid > 0 ? (ask - bid) / mid : 1;
+
+    if (oi < 50) {
+      warnings.push(`${side.toUpperCase()} ${strike}: low OI (${oi}) — fill risk elevated`);
+    }
+    if (spreadPct > 0.25) {
+      warnings.push(`${side.toUpperCase()} ${strike}: wide bid-ask (${(spreadPct * 100).toFixed(0)}%) — use limit orders`);
+    }
+  }
+
+  return warnings;
 }
