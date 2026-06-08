@@ -16,6 +16,7 @@ interface Candidate {
   valueScore?: number;
   institutionalScore?: number;
   optionsFlowScore?: number;
+  convictionScore?: number;
   price?: string;
   priceChangePct?: string;
   rsi?: string;

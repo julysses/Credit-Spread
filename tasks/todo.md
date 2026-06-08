@@ -35,8 +35,19 @@
   - `next` / `eslint-config-next` audit still points to Next 16 for remaining high findings, which is a major framework upgrade and should be planned separately.
 
 ## Recommended Next Work
-1. Browser QA with screenshots on deployed preview or local dev.
-2. Open PR from `claude/spx-signal-desk-oEOla`.
+1. ~~Browser QA with screenshots on deployed preview or local dev.~~
+2. ~~Open PR from `claude/spx-signal-desk-oEOla`.~~ (branch IS the default branch — N/A)
 3. Plan Drizzle major upgrade and migration verification.
 4. Plan Anthropic SDK major upgrade and API compatibility testing.
-5. Add real realized volatility source and option-chain liquidity filters.
+5. ~~Add real realized volatility source and option-chain liquidity filters.~~ ✅ Done (commit `3fd2f16`)
+
+## Completed — 2026-06-07: Real RV + Liquidity Filters (commit `3fd2f16`)
+- `server/market-data.ts`:
+  - `fetchRealizedVol()`: Yahoo Finance 2-month daily history → 20-day annualized HV (stddev log returns × √252). Live build confirmed: **HV = 13.15%** at SPX 7383.
+  - `filterLiquidChain()`: strips entries where both sides fail min OI (10), max bid-ask spread (30%), min mid ($0.05) — applied before volatility surface build.
+  - `MarketDataSnapshot.realizedVol?: number` added.
+- `app/api/strategy/route.ts`:
+  - Replaced synthetic `IV × 0.85` fallback with `snapshot.realizedVol`; fallback preserved with warning if real data unavailable.
+  - `checkStrikeLiquidity()`: post-selection spot-check of short/long strikes against live chain — appends OI/spread warnings to trade recommendation.
+  - Chain liquidity label (`good` / `thin` / `missing`) surfaces in `dataQuality.warnings`.
+  - `snapshot.realizedVol` exposed in API response.

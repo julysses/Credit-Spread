@@ -41,6 +41,13 @@ export function GrowthTab() {
         <div className="flex-1" />
 
         <a
+          href="/conviction"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-500/30 bg-green-500/10 text-[10px] text-green-400 hover:text-green-300 hover:border-green-500/50 transition-colors shrink-0 uppercase tracking-[0.12em]"
+        >
+          🧠 Conviction Picks
+        </a>
+
+        <a
           href="/api/growth/training-data?format=csv&minReturnDaysLabeled=30"
           className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg border border-sd-line text-[10px] text-gray-500 hover:text-gray-300 hover:border-gray-500 transition-colors shrink-0"
           download
