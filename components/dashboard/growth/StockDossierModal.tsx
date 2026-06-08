@@ -57,18 +57,19 @@ export function StockDossierModal({ candidate, onClose }: StockDossierModalProps
   const [dossier, setDossier] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeLayer, setActiveLayer] = useState(0);
+  const candidateSymbol = candidate?.symbol;
 
   useEffect(() => {
-    if (!candidate) return;
+    if (!candidateSymbol) return;
     setDossier(null);
     setLoading(true);
 
-    fetch(`/api/growth/dossier/${candidate.symbol}`)
+    fetch(`/api/growth/dossier/${candidateSymbol}`)
       .then(r => r.json())
       .then(data => setDossier(data?.data?.dossier ?? null))
       .catch(() => setDossier(null))
       .finally(() => setLoading(false));
-  }, [candidate?.symbol]);
+  }, [candidateSymbol]);
 
   if (!candidate) return null;
 

@@ -1,39 +1,42 @@
-# Credit Spread App Review + Revamp Implementation
+# Credit Spread App QA + Follow-up Fixes
 
-## Current Request
-- [x] Review and plan approved by user
-- [x] Pull latest from GitHub before implementation
-- [x] Implement Sprint 1 safety/mechanical fixes
-  - [x] Configure non-interactive ESLint
-  - [x] Add data-confidence metadata
-  - [x] Make 0DTE Monte Carlo accept fractional DTE
-  - [x] Fix open exposure to use max-loss exposure instead of credit received
-  - [x] Store recommendation snapshot on trade log payload
-- [x] Implement Sprint 2 strategy engine upgrades
-  - [x] Add data-quality and IV/RV no-trade gates
-  - [x] Replace rough strike placement with target-delta plus expected-move clearance
-  - [x] Add credit/width quality checks
-  - [x] Fix iron condor touch probability to combined two-sided touch risk
-  - [x] Add generated exit plan
-- [x] Implement Sprint 3 UI revamp
-  - [x] Add decision-first badges: TRADE APPROVED / WATCH ONLY / DATA INVALID / NO TRADE
-  - [x] Add data-confidence badges in header and trade card
-  - [x] Replace Kelly headline metric with credit/width and breakeven
-  - [x] Show probability of touch beside POP
-  - [x] Add richer exit rules and invalidation text
-- [x] Implement Sprint 4 audit/learning loop basics
-  - [x] Add recommendation audit record builder
-  - [x] Attach audit payload to strategy decision
-  - [x] Send audit snapshot when logging trades
-- [x] Run build/typecheck/lint
-- [ ] Review diff, commit, push
+## Completed
+- [x] Review and implementation completed/pushed
+- [x] Run local app QA/build smoke test
+- [x] Fix remaining React hook lint warning
+- [x] Run controlled dependency audit summary
+- [x] Apply safe dependency upgrades
+- [x] Re-run verification
+- [x] Commit and push follow-up fixes
 
 ## Verification Results
-- `npm run build`: passed
-- `npx tsc --noEmit`: passed
-- `npm run lint`: passed with one pre-existing warning in `components/dashboard/growth/StockDossierModal.tsx` about a missing React hook dependency
+- `git pull --ff-only`: passed, branch up to date before work.
+- `npm run lint`: passed, no warnings or errors.
+- `npx tsc --noEmit`: passed.
+- `npm run build`: passed on Next.js 14.2.35.
+- Local start smoke test: passed, `GET /` returned HTTP 200.
+- Mock strategy API smoke test: passed, `GET /api/strategy?mock=true` returned `success: true`, `dataQuality.confidence: mock`, and `decisionStatus: data_invalid`.
 
-## Notes
-- Added `@typescript-eslint/parser@7.2.0` and `@typescript-eslint/eslint-plugin@7.2.0` so existing `/* eslint-disable @typescript-eslint/no-explicit-any */` comments resolve under Next lint.
-- `npm install` reported existing dependency vulnerabilities: 9 moderate, 14 high, 1 critical. Not fixed in this pass because forced audit fixes may introduce breaking upgrades.
-- Codex CLI was not installed, so true external Codex review could not run locally.
+## Follow-up Fixes Applied
+- Fixed React hook dependency warning in `components/dashboard/growth/StockDossierModal.tsx` by deriving `candidateSymbol` and using that stable dependency in the dossier fetch effect.
+- Upgraded safe/non-major security-related dependencies:
+  - `next` / `eslint-config-next`: `14.2.5` -> `14.2.35`
+  - `axios`: `^1.7.3` -> `^1.17.0`
+  - `@typescript-eslint/parser`: `^7.2.0` -> `^7.18.0`
+  - `@typescript-eslint/eslint-plugin`: `^7.2.0` -> `^7.18.0`
+
+## Dependency Audit Summary
+- Before safe upgrades: 24 vulnerabilities total, including 1 critical.
+- After safe upgrades: 16 vulnerabilities total, 0 critical, 8 moderate, 8 high.
+- Remaining direct findings require larger compatibility work:
+  - `drizzle-orm` high, fix requires semver-major upgrade to `0.45.2`.
+  - `drizzle-kit` moderate, fix requires semver-major upgrade to `0.31.10`.
+  - `@anthropic-ai/sdk` moderate, fix requires semver-major upgrade to `0.102.0`.
+  - `next` / `eslint-config-next` audit still points to Next 16 for remaining high findings, which is a major framework upgrade and should be planned separately.
+
+## Recommended Next Work
+1. Browser QA with screenshots on deployed preview or local dev.
+2. Open PR from `claude/spx-signal-desk-oEOla`.
+3. Plan Drizzle major upgrade and migration verification.
+4. Plan Anthropic SDK major upgrade and API compatibility testing.
+5. Add real realized volatility source and option-chain liquidity filters.
