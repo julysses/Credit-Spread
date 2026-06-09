@@ -40,6 +40,7 @@ export function FutureMoverPanel() {
   const [flowAlerts, setFlowAlerts] = useState<FlowAlert[]>([]);
   const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState<Candidate | null>(null);
+  const [dataSource, setDataSource] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     Promise.all([
@@ -47,6 +48,7 @@ export function FutureMoverPanel() {
       fetch('/api/growth/flow?days=7&limit=20').then(r => r.json()),
     ]).then(([screener, flow]) => {
       setCandidates(screener?.data?.candidates ?? []);
+      setDataSource(screener?.data?.scan?.dataSource);
       setFlowAlerts(flow?.data?.alerts ?? []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
@@ -57,8 +59,15 @@ export function FutureMoverPanel() {
     <div className="space-y-6">
       {/* Prediction picks */}
       <div>
-        <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em] mb-3">
-          Prediction Watchlist — Squeeze · Congress · Unusual Flow
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[10px] text-gray-500 uppercase tracking-[0.14em]">
+            Prediction Watchlist — Squeeze · Congress · Unusual Flow
+          </div>
+          <div className="text-[10px] font-mono">
+            {dataSource === 'live' && <span className="text-green-400 font-semibold">● LIVE</span>}
+            {dataSource === 'mock' && <span className="text-yellow-500 font-semibold">○ MOCK</span>}
+            {dataSource === 'db'   && <span className="text-blue-400 font-semibold">● CACHED</span>}
+          </div>
         </div>
 
         {candidates.length === 0 ? (

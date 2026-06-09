@@ -32,7 +32,7 @@ export function LongTermPanel() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState<Candidate | null>(null);
-  const [scanInfo, setScanInfo]     = useState<{ scanDate?: string } | null>(null);
+  const [scanInfo, setScanInfo]     = useState<{ scanDate?: string; dataSource?: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/growth/screener?type=long_term&limit=10')
@@ -50,7 +50,12 @@ export function LongTermPanel() {
   return (
     <div className="space-y-3">
       {scanInfo?.scanDate && (
-        <div className="text-[10px] font-mono text-gray-500">Scan: {scanInfo.scanDate}</div>
+        <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500">
+          <span>Scan: {scanInfo.scanDate}</span>
+          {scanInfo.dataSource === 'live'   && <span className="text-green-400 font-semibold">● LIVE</span>}
+          {scanInfo.dataSource === 'mock'   && <span className="text-yellow-500 font-semibold">○ MOCK</span>}
+          {scanInfo.dataSource === 'db'     && <span className="text-blue-400 font-semibold">● CACHED</span>}
+        </div>
       )}
 
       <div className="text-[10px] text-gray-500 bg-sd-muted/30 border border-sd-line/40 rounded-lg px-3 py-2">
