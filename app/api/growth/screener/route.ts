@@ -191,7 +191,7 @@ export async function GET(req: NextRequest) {
             ok: true,
             data: {
               scanDate: dbScanDate,
-              scan: scan[0] ?? null,
+              scan: { ...(scan[0] ?? {}), dataSource: 'db' },
               candidates: rows.map(normalizeCandidate),
               count: rows.length,
             },
@@ -203,9 +203,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── 2. Live data fetch ──────────────────────────────────────────────────────
+  // ── 2. Live data fetch (15s timeout) ───────────────────────────────────────
   try {
-    const liveCandidates = await fetchLiveGrowthCandidates(strategyType, limit);
+    const liveCandidates = await Promise.race([
+      fetchLiveGrowthCandidates(strategyType, limit),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('live fetch timeout')), 15000)
+      ),
+    ]);
     if (liveCandidates.length > 0) {
       return NextResponse.json({
         ok: true,
@@ -218,6 +223,7 @@ export async function GET(req: NextRequest) {
             longTermCount:    liveCandidates.filter(c => c.strategyType === 'long_term').length,
             futureMoverCount: liveCandidates.filter(c => c.strategyType === 'future_mover').length,
             marketRegime: 'neutral',
+            dataSource: 'live',
           },
           candidates: liveCandidates.map(normalizeCandidate),
           count: liveCandidates.length,
@@ -241,6 +247,7 @@ export async function GET(req: NextRequest) {
         longTermCount: 7,
         futureMoverCount: 3,
         marketRegime: 'neutral',
+        dataSource: 'mock',
       },
       candidates: getMockCandidates(strategyType).map(normalizeCandidate),
       count: 10,
