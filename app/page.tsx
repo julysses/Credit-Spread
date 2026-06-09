@@ -42,6 +42,41 @@ export default function DashboardPage() {
     lastUpdated: '',
   });
 
+  // Fast poll (60s): strategy only — most time-sensitive
+  const fetchMarket = useCallback(async () => {
+    try {
+      setState(s => ({ ...s, loading: true, error: null }));
+      const stratRes = await fetch('/api/strategy').then(r => r.json());
+      setState(s => ({
+        ...s,
+        loading: false,
+        strategy: stratRes?.data,
+        lastUpdated: new Date().toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }) + ' ET',
+      }));
+    } catch (err) {
+      setState(s => ({ ...s, loading: false, error: String(err) }));
+    }
+  }, []);
+
+  // Slow poll (5 min): analytics + trades — rarely change intraday
+  const fetchSlowData = useCallback(async () => {
+    try {
+      const [analyticsRes, tradesRes] = await Promise.all([
+        fetch('/api/analytics').then(r => r.json()),
+        fetch('/api/trades').then(r => r.json()),
+      ]);
+      setState(s => ({
+        ...s,
+        analytics: analyticsRes?.data,
+        trades:    tradesRes?.data,
+      }));
+    } catch { /* silent — doesn't block the UI */ }
+  }, []);
+
+  // Full refresh: used by onRefresh button and after trade submission (includes monte carlo)
   const fetchAll = useCallback(async () => {
     try {
       setState(s => ({ ...s, loading: true, error: null }));
@@ -59,16 +94,16 @@ export default function DashboardPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            spotPrice:        stratRes.data.conditions.spxPrice,
+            spotPrice:         stratRes.data.conditions.spxPrice,
             impliedVolatility: stratRes.data.conditions.impliedVol || 0.18,
             drift: 0,
-            daysToExpiry:     rec.daysToExpiry || 7,
-            numSimulations:   5000,
-            numPaths:         40,
-            shortStrike:      rec.shortLeg?.strike,
-            longStrike:       rec.longLeg?.strike,
-            spreadType:       rec.shortLeg?.optionType,
-            creditReceived:   rec.credit,
+            daysToExpiry:      rec.daysToExpiry || 7,
+            numSimulations:    5000,
+            numPaths:          40,
+            shortStrike:       rec.shortLeg?.strike,
+            longStrike:        rec.longLeg?.strike,
+            spreadType:        rec.shortLeg?.optionType,
+            creditReceived:    rec.credit,
           }),
         }).then(r => r.json());
         mcData = mcRes?.data;
@@ -93,9 +128,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchAll();
-    const id = setInterval(fetchAll, 60000);
-    return () => clearInterval(id);
-  }, [fetchAll]);
+    const fastId = setInterval(fetchMarket, 60000);
+    const slowId = setInterval(fetchSlowData, 300000);
+    return () => {
+      clearInterval(fastId);
+      clearInterval(slowId);
+    };
+  }, [fetchAll, fetchMarket, fetchSlowData]);
 
   const handleAcceptTrade = async () => {
     const rec = state.strategy?.decision?.recommendation;

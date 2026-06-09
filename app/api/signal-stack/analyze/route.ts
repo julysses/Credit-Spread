@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const SYSTEM_PROMPT = `You are a senior SPX options risk manager using a Signal Stacking framework. Analyze the provided macro and flow indicators, score them against the defined thresholds, and deliver a concise institutional-grade trade recommendation. Be direct, specific, and actionable. No disclaimers.
 
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   const snapshot = await req.json();
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
 
   const userMessage = `Analyze this Signal Stack snapshot:

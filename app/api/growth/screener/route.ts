@@ -3,6 +3,9 @@ import { db } from '@/database/db';
 import { stockCandidates, growthScans } from '@/database/schema';
 import { eq, and, desc, gte } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   try {
@@ -42,7 +45,7 @@ export async function GET(req: NextRequest) {
       .limit(1)
       .execute();
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         scanDate,
@@ -51,10 +54,12 @@ export async function GET(req: NextRequest) {
         count:      candidates.length,
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (err) {
     // Return mock data on DB errors (dev mode without DB)
     const scanDate = new Date().toISOString().split('T')[0];
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         scanDate,
@@ -64,6 +69,8 @@ export async function GET(req: NextRequest) {
         _mock: true,
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   }
 }
 

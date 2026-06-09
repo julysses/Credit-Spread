@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshotCached, getMockMarketData } from '@/server/market-data';
 import { getMockNewsAnalysis, analyzeNews } from '@/server/news-analyzer';
 import { generateMorningBrief } from '@/server/ai-briefing';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
@@ -7,31 +7,26 @@ import { classifyVIXRegime } from '@/lib/models/volatility';
 import { fetchEconomicCalendar } from '@/server/finnhub';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 export async function GET() {
   try {
-    const snapshot = process.env.MARKETDATA_API_KEY
-      ? await fetchMarketSnapshot()
-      : getMockMarketData();
-    const newsAnalysis = process.env.GNEWS_API_KEY
-      ? await analyzeNews()
-      : getMockNewsAnalysis();
+    const [snapshot, newsAnalysis, econEvents] = await Promise.all([
+      process.env.MARKETDATA_API_KEY ? fetchMarketSnapshotCached() : Promise.resolve(getMockMarketData()),
+      process.env.GNEWS_API_KEY ? analyzeNews() : Promise.resolve(getMockNewsAnalysis()),
+      fetchEconomicCalendar(),
+    ]);
 
     const { spx, vix } = snapshot;
     const impliedVol = vix.price / 100;
     const ivRankValue = Math.min(100, Math.max(0, (vix.price - 12) / (40 - 12) * 100));
 
-    // Check for high-impact US economic events today or tomorrow
-    let isMacroEventDay = false;
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const econEvents = await fetchEconomicCalendar();
-      isMacroEventDay = econEvents.some(
-        e => e.country === 'US' && e.impact === 'high' &&
-          (e.time.startsWith(today) || e.time.startsWith(tomorrow))
-      );
-    } catch { /* fall through — default false */ }
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const isMacroEventDay = econEvents.some(
+      e => e.country === 'US' && e.impact === 'high' &&
+        (e.time.startsWith(today) || e.time.startsWith(tomorrow))
+    );
 
     const conditions: MarketConditions = {
       spxPrice: spx.price,

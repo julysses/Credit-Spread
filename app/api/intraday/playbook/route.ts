@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { scoreAllIntradayStrategies } from '@/lib/models/intraday-engine';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshotCached, getMockMarketData } from '@/server/market-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +9,7 @@ export async function GET() {
     // Fetch live market data; fall back to mock if unavailable
     let snap;
     try {
-      snap = await fetchMarketSnapshot();
+      snap = await fetchMarketSnapshotCached();
       if (!snap || snap.spx.price <= 0) snap = getMockMarketData();
     } catch {
       snap = getMockMarketData();

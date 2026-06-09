@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import axios from 'axios';
-import { fetchMarketSnapshot } from '@/server/market-data';
+import { fetchMarketSnapshotCached } from '@/server/market-data';
 import {
   deriveTechnicalAnalysis,
   computeSMASeries,
@@ -111,10 +111,12 @@ export interface TechnicalsResponse {
   };
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const [snapshot, history] = await Promise.all([
-      fetchMarketSnapshot(),
+      fetchMarketSnapshotCached(),
       fetchSPXHistory(),
     ]);
 
@@ -122,7 +124,7 @@ export async function GET() {
     const vix = snapshot.vix.price;
 
     if (!history || history.closes.length < 30) {
-      return NextResponse.json({
+      const res = NextResponse.json({
         success: true,
         data: {
           swingBias: 'neutral' as const,
@@ -135,6 +137,8 @@ export async function GET() {
           fetchedAt: Date.now(),
         },
       });
+      res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return res;
     }
 
     const { timestamps, closes } = history;
@@ -158,7 +162,7 @@ export async function GET() {
       intradayNote += ' — choppy/neutral intraday';
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         ...analysis,
@@ -169,6 +173,8 @@ export async function GET() {
         fetchedAt: Date.now(),
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (err) {
     return NextResponse.json({ success: false, error: String(err) }, { status: 500 });
   }

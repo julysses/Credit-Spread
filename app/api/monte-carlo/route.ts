@@ -7,6 +7,7 @@ import {
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 const MCSchema = z.object({
   spotPrice: z.number().positive(),
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         summary: {
@@ -71,6 +72,8 @@ export async function POST(req: NextRequest) {
       },
       timestamp: Date.now(),
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (err) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ success: false, error: err.errors }, { status: 400 });
@@ -92,7 +95,7 @@ export async function GET(req: NextRequest) {
 
   const histogram = buildPriceHistogram(results.terminalPrices, 30);
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     success: true,
     data: {
       summary: {
@@ -105,4 +108,6 @@ export async function GET(req: NextRequest) {
       paths: paths.slice(0, 20),
     },
   });
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  return res;
 }

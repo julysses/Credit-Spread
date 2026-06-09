@@ -3,6 +3,8 @@ import { db } from '@/database/db';
 import { optionsFlowAlerts } from '@/database/schema';
 import { desc, gte } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -18,9 +20,11 @@ export async function GET(req: NextRequest) {
       .limit(limit)
       .execute();
 
-    return NextResponse.json({ ok: true, data: { alerts, count: alerts.length } });
+    const res = NextResponse.json({ ok: true, data: { alerts, count: alerts.length } });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch {
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         alerts: getMockFlowAlerts(),
@@ -28,6 +32,8 @@ export async function GET(req: NextRequest) {
         _mock: true,
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   }
 }
 

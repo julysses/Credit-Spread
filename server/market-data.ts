@@ -587,6 +587,18 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   };
 }
 
+let _snapshotCache: { data: MarketDataSnapshot; at: number } | null = null;
+const SNAPSHOT_TTL = 10_000; // 10 seconds — safe to reuse across warm-instance invocations
+
+export async function fetchMarketSnapshotCached(): Promise<MarketDataSnapshot> {
+  if (_snapshotCache && Date.now() - _snapshotCache.at < SNAPSHOT_TTL) {
+    return _snapshotCache.data;
+  }
+  const data = await fetchMarketSnapshot();
+  _snapshotCache = { data, at: Date.now() };
+  return data;
+}
+
 /**
  * Mock data for development/demo when API keys not configured
  */

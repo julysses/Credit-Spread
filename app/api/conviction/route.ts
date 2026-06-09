@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildConvictionPicks } from '@/server/conviction/conviction-engine';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 10), 1), 25);
 
   try {
     const picks = await buildConvictionPicks(limit);
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       data: {
         picks,
@@ -23,6 +26,8 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (err) {
     return NextResponse.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshotCached, getMockMarketData } from '@/server/market-data';
 import { buildVolatilitySurface, computeVolatilitySkew, classifyVIXRegime, ivRank } from '@/lib/models/volatility';
 import { expectedMove } from '@/lib/models/black-scholes';
 
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const snapshot = await fetchMarketSnapshot();
+    const snapshot = await fetchMarketSnapshotCached();
 
     const { spx, vix, optionChain } = snapshot;
     const riskFreeRate = 0.05;

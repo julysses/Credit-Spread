@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeIntradaySignals, type IntradayInputs } from '@/lib/models/intraday-engine';
-import { fetchMarketSnapshot } from '@/server/market-data';
+import { fetchMarketSnapshotCached } from '@/server/market-data';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     let spxPrice = body.spxPrice ?? 5800;
     let vix = body.vix ?? 18;
     try {
-      const snapshot = await fetchMarketSnapshot();
+      const snapshot = await fetchMarketSnapshotCached();
       spxPrice = snapshot.spx?.price ?? spxPrice;
       vix = snapshot.vix?.price ?? vix;
     } catch {
@@ -68,7 +68,7 @@ export async function GET() {
     let spxPrice = 5800;
     let vix = 18;
     try {
-      const snapshot = await fetchMarketSnapshot();
+      const snapshot = await fetchMarketSnapshotCached();
       spxPrice = snapshot.spx?.price ?? spxPrice;
       vix = snapshot.vix?.price ?? vix;
     } catch { /* ignore */ }

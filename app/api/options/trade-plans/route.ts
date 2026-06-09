@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { fetchMarketSnapshot } from '@/server/market-data';
+import { fetchMarketSnapshotCached } from '@/server/market-data';
 import { fetchSignalStackInputs } from '@/server/signal-stack-inputs';
 import { computeCompositeScore } from '@/lib/models/regime-engine';
 import { selectOptionsStrategies, STRATEGY_CATALOG } from '@/lib/models/options-strategy-selector';
@@ -557,7 +557,7 @@ function buildVCPSwingPlan(
 export async function GET() {
   try {
     const [snapshot, inputs] = await Promise.all([
-      fetchMarketSnapshot(),
+      fetchMarketSnapshotCached(),
       fetchSignalStackInputs(),
     ]);
 
@@ -620,7 +620,7 @@ export async function GET() {
     // Deduplicate by strategyId
     const unique = Array.from(new Map(plans.map(p => [p.strategyId, p])).values());
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       data: {
         plans: unique,
@@ -630,6 +630,8 @@ export async function GET() {
         fetchedAt: Date.now(),
       },
     });
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
   } catch (err) {
     return NextResponse.json({ success: false, error: String(err) }, { status: 500 });
   }
