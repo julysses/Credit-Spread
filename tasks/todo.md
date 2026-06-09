@@ -13,8 +13,8 @@ Make the Growth stock cards show live provider-backed prices instead of stale sc
 - [x] Update remaining Growth stock card panels to render `currentPrice`/provider status instead of raw persisted `price`.
 - [x] Verify production API response source/status for Growth screener.
 - [x] Run local type/build verification.
-- [ ] Review diff for only relevant changes.
-- [ ] Commit and push completed update.
+- [x] Review diff for only relevant changes.
+- [x] Commit and push completed update.
 
 ### Verification Notes
 - Production `https://credit-spread.vercel.app/api/growth/screener` still returns `_mock: true` and stale NVDA/CRWD prices as of 2026-06-09 17:24 UTC.
