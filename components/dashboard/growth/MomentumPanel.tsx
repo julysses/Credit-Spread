@@ -31,7 +31,7 @@ interface Candidate {
 export function MomentumPanel() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [scanInfo, setScanInfo]     = useState<{ scanDate?: string; marketRegime?: string } | null>(null);
+  const [scanInfo, setScanInfo]     = useState<{ scanDate?: string; marketRegime?: string; dataSource?: string } | null>(null);
   const [selected, setSelected]     = useState<Candidate | null>(null);
 
   useEffect(() => {
@@ -51,7 +51,18 @@ export function MomentumPanel() {
     <div className="space-y-3">
       {scanInfo && (
         <div className="flex items-center justify-between text-[10px] font-mono text-gray-500">
-          <span>Scan: {scanInfo.scanDate}</span>
+          <div className="flex items-center gap-2">
+            <span>Scan: {scanInfo.scanDate}</span>
+            {scanInfo.dataSource === 'live' && (
+              <span className="text-green-400 font-semibold">● LIVE</span>
+            )}
+            {scanInfo.dataSource === 'mock' && (
+              <span className="text-yellow-500 font-semibold">○ MOCK</span>
+            )}
+            {scanInfo.dataSource === 'db' && (
+              <span className="text-blue-400 font-semibold">● CACHED</span>
+            )}
+          </div>
           {scanInfo.marketRegime && (
             <span className={`uppercase tracking-wider ${scanInfo.marketRegime === 'bull' ? 'text-green-400' : scanInfo.marketRegime === 'bear' ? 'text-red-400' : 'text-gray-400'}`}>
               {scanInfo.marketRegime} regime
