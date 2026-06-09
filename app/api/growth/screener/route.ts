@@ -194,6 +194,35 @@ async function liveFallbackResponse(strategyType: StrategyType | 'all', limit: n
       fetchLiveGrowthCandidates(strategyType, limit),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('live fetch timeout')), 18000)),
     ]);
+    const liveQuotes = await fetchLiveStockQuotes(candidates.map(c => c.symbol)).catch(() => new Map());
+    const hydratedCandidates = candidates.map(candidate => {
+      const liveQuote = liveQuotes.get(candidate.symbol);
+      if (!liveQuote) return candidate;
+      const entryPrice = Number(candidate.entryPrice ?? candidate.scanPrice ?? candidate.price);
+      const entryReturnPct = entryPrice > 0 ? ((liveQuote.price - entryPrice) / entryPrice) * 100 : null;
+      return {
+        ...candidate,
+        currentPrice: liveQuote.price,
+        currentPriceChangePct: liveQuote.changePct,
+        currentPriceStatus: liveQuote.status,
+        currentPriceProvider: liveQuote.provider,
+        currentPriceAsOf: new Date(liveQuote.timestamp).toISOString(),
+        price: liveQuote.price,
+        priceChangePct: liveQuote.changePct,
+        priceStatus: liveQuote.status,
+        priceProvider: liveQuote.provider,
+        priceAsOf: new Date(liveQuote.timestamp).toISOString(),
+        entryReturnPct,
+        sources: {
+          ...candidate.sources,
+          price: {
+            status: liveQuote.status,
+            provider: liveQuote.provider,
+            fetchedAt: liveQuote.timestamp,
+          },
+        },
+      };
+    });
     const scanDate = new Date().toISOString().split('T')[0];
     return NextResponse.json({
       ok: true,
@@ -202,16 +231,16 @@ async function liveFallbackResponse(strategyType: StrategyType | 'all', limit: n
         scan: {
           scanDate,
           totalScreened: GROWTH_UNIVERSE.length,
-          shortTermCount: candidates.filter(c => c.strategyType === 'short_term').length,
-          longTermCount: candidates.filter(c => c.strategyType === 'long_term').length,
-          futureMoverCount: candidates.filter(c => c.strategyType === 'future_mover').length,
+          shortTermCount: hydratedCandidates.filter(c => c.strategyType === 'short_term').length,
+          longTermCount: hydratedCandidates.filter(c => c.strategyType === 'long_term').length,
+          futureMoverCount: hydratedCandidates.filter(c => c.strategyType === 'future_mover').length,
           marketRegime: 'neutral',
           dataSource: 'live',
           fallbackReason: reason,
         },
-        candidates,
-        count: candidates.length,
-        emptyReason: candidates.length === 0 ? 'live_sources_unavailable' : null,
+        candidates: hydratedCandidates,
+        count: hydratedCandidates.length,
+        emptyReason: hydratedCandidates.length === 0 ? 'live_sources_unavailable' : null,
       },
     });
   } catch (err) {
