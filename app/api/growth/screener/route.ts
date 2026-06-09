@@ -1,13 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
 import { db } from '@/database/db';
 import { stockCandidates, growthScans, intelligenceDossiers } from '@/database/schema';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { fetchLiveStockQuotes } from '@/server/stock-quotes';
 import { fetchPoliticianSignal } from '@/server/politicians/politician-signals';
+import { fetchAlpacaDailyBars, alpacaConfigured } from '@/server/alpaca';
+import { fetchFundamentals } from '@/server/fundamentals';
+import {
+  buildGrowthFeatures,
+  scoreCandidate,
+  type StrategyType,
+} from '@/lib/models/growth-screener';
+import type { OHLCVBar } from '@/lib/models/stock-feature-engine';
 
 export const dynamic = 'force-dynamic';
 
 type JsonRecord = Record<string, unknown>;
+
+const GROWTH_UNIVERSE = [
+  'NVDA','MSFT','AAPL','META','AMZN','GOOGL','AMD','AVGO','TSLA',
+  'CRWD','AXON','PLTR','DDOG','SNOW','TTD','HUBS','NOW','PANW','CRM','COIN',
+];
+
+const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  Accept: 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
 
 function asRecord(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : null;
@@ -41,12 +62,175 @@ function latestBySymbol<T extends { symbol: string; dossierDate?: string | null;
   return map;
 }
 
+async function fetchDailyBarsYahoo(symbol: string): Promise<OHLCVBar[] | null> {
+  try {
+    const resp = await axios.get(`${YAHOO_CHART}/${encodeURIComponent(symbol)}`, {
+      params: { range: '1y', interval: '1d', includeAdjustedClose: 'true' },
+      headers: YAHOO_HEADERS,
+      timeout: 10000,
+    });
+    const result = resp.data?.chart?.result?.[0];
+    if (!result) return null;
+    const timestamps: number[] = result.timestamp ?? [];
+    const quote = result.indicators?.quote?.[0];
+    const adjClose: (number | null)[] =
+      result.indicators?.adjclose?.[0]?.adjclose ?? quote?.close ?? [];
+    if (!quote || timestamps.length === 0) return null;
+
+    const bars: OHLCVBar[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const open = quote.open?.[i];
+      const high = quote.high?.[i];
+      const low = quote.low?.[i];
+      const close = adjClose[i] ?? quote.close?.[i];
+      const volume = quote.volume?.[i] ?? 0;
+      if (open != null && high != null && low != null && close != null && Number.isFinite(close)) {
+        bars.push({ timestamp: timestamps[i], open, high, low, close, volume });
+      }
+    }
+    return bars.length >= 50 ? bars : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchDailyBars(symbol: string): Promise<OHLCVBar[] | null> {
+  if (alpacaConfigured()) {
+    const bars = await fetchAlpacaDailyBars(symbol, 280);
+    if (bars && bars.length >= 50) return bars;
+  }
+  return fetchDailyBarsYahoo(symbol);
+}
+
+async function fetchLiveGrowthCandidates(type: StrategyType | 'all', limit: number) {
+  const spyBars = await fetchDailyBars('SPY').catch(() => null) ?? [];
+  const results = await Promise.allSettled(
+    GROWTH_UNIVERSE.map(async (symbol) => {
+      const [bars, fundamentals] = await Promise.all([
+        fetchDailyBars(symbol),
+        fetchFundamentals(symbol),
+      ]);
+      return { symbol, bars, fundamentals };
+    })
+  );
+
+  const candidates = [];
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { symbol, bars, fundamentals } = result.value;
+    if (!bars || bars.length < 50) continue;
+
+    const features = buildGrowthFeatures(symbol, bars, spyBars, fundamentals, null, null);
+    if (!features) continue;
+
+    const strategyTypes: StrategyType[] = ['short_term', 'long_term', 'future_mover'];
+    for (const strategyType of strategyTypes) {
+      if (type !== 'all' && strategyType !== type) continue;
+      const scored = scoreCandidate(features, strategyType);
+      const latestBar = bars[bars.length - 1];
+      const previousBar = bars[bars.length - 2] ?? latestBar;
+      const change = latestBar.close - previousBar.close;
+      const changePct = previousBar.close > 0 ? (change / previousBar.close) * 100 : 0;
+
+      candidates.push({
+        ...scored,
+        id: `${symbol}-${strategyType}`,
+        symbol,
+        scanDate: new Date().toISOString().split('T')[0],
+        strategyType,
+        companyName: fundamentals.companyName,
+        sector: fundamentals.sector,
+        price: latestBar.close,
+        priceChangePct: changePct,
+        scanPrice: latestBar.close,
+        entryPrice: latestBar.close,
+        currentPrice: latestBar.close,
+        currentPriceChangePct: changePct,
+        entryReturnPct: 0,
+        priceStatus: alpacaConfigured() ? 'live' : 'delayed',
+        priceProvider: alpacaConfigured() ? 'Alpaca' : 'Yahoo Finance',
+        priceAsOf: new Date(latestBar.timestamp * 1000).toISOString(),
+        currentPriceStatus: alpacaConfigured() ? 'live' : 'delayed',
+        currentPriceProvider: alpacaConfigured() ? 'Alpaca' : 'Yahoo Finance',
+        currentPriceAsOf: new Date(latestBar.timestamp * 1000).toISOString(),
+        availableSince: new Date().toISOString(),
+        availableForLabel: '0m',
+        rsi14: features.rsi14,
+        momentumScore: scored.momentumScore?.total ?? scored.compositeScore,
+        growthScore: scored.valueGrowthScore?.total ?? Math.max(0, scored.compositeScore - 10),
+        valueScore: scored.valueGrowthScore?.total ?? Math.max(0, scored.compositeScore - 15),
+        institutionalScore: features.institutional.institutionalScore,
+        optionsFlowScore: Math.round(features.flow.flowScore),
+        above200sma: features.technical.lastClose > features.technical.sma200,
+        above50ema: features.priceAboveEma50,
+        revenueGrowthPct: fundamentals.revenueGrowthYoy,
+        epsGrowthPct: fundamentals.epsGrowthYoy,
+        pegRatio: fundamentals.pegRatio,
+        marketCap: fundamentals.marketCap,
+        aiThesis: null,
+        signals: scored.signals,
+        sources: {
+          price: {
+            status: alpacaConfigured() ? 'live' : 'delayed',
+            provider: alpacaConfigured() ? 'Alpaca' : 'Yahoo Finance',
+            asOf: new Date(latestBar.timestamp * 1000).toISOString(),
+          },
+          fundamentals: {
+            status: fundamentals.sector === 'Unavailable' ? 'unavailable' : 'live',
+            provider: fundamentals.sector === 'Unavailable' ? 'none' : 'FMP/Alpha Vantage',
+          },
+        },
+      });
+    }
+  }
+
+  candidates.sort((a, b) => b.compositeScore - a.compositeScore);
+  return candidates.slice(0, limit);
+}
+
+async function liveFallbackResponse(strategyType: StrategyType | 'all', limit: number, reason: string) {
+  try {
+    const candidates = await Promise.race([
+      fetchLiveGrowthCandidates(strategyType, limit),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('live fetch timeout')), 18000)),
+    ]);
+    const scanDate = new Date().toISOString().split('T')[0];
+    return NextResponse.json({
+      ok: true,
+      data: {
+        scanDate,
+        scan: {
+          scanDate,
+          totalScreened: GROWTH_UNIVERSE.length,
+          shortTermCount: candidates.filter(c => c.strategyType === 'short_term').length,
+          longTermCount: candidates.filter(c => c.strategyType === 'long_term').length,
+          futureMoverCount: candidates.filter(c => c.strategyType === 'future_mover').length,
+          marketRegime: 'neutral',
+          dataSource: 'live',
+          fallbackReason: reason,
+        },
+        candidates,
+        count: candidates.length,
+        emptyReason: candidates.length === 0 ? 'live_sources_unavailable' : null,
+      },
+    });
+  } catch (err) {
+    console.error('[growth/screener] Live fallback failed:', (err as Error).message);
+    return NextResponse.json({
+      ok: false,
+      code: 'DATA_UNAVAILABLE',
+      error: 'Growth screener live data is unavailable. Check DATABASE_URL, Alpaca/Yahoo access, and FMP/Alpha Vantage provider configuration.',
+    }, { status: 503 });
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
+  const strategyType = (searchParams.get('type') ?? 'short_term') as StrategyType | 'all';
+  const limit        = Math.min(parseInt(searchParams.get('limit') ?? '20'), 50);
+
   try {
-    const strategyType = searchParams.get('type') ?? 'short_term';
     const date         = searchParams.get('date');
-    const limit        = Math.min(parseInt(searchParams.get('limit') ?? '20'), 50);
 
     let scanDate = date;
     if (!scanDate) {
@@ -60,21 +244,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (!scanDate) {
-      return NextResponse.json({
-        ok: true,
-        data: {
-          scanDate: null,
-          scan: null,
-          candidates: [],
-          count: 0,
-          emptyReason: 'no_scan_data',
-        },
-      });
+      return liveFallbackResponse(strategyType, limit, 'no_scan_data');
     }
 
     const conditions = [eq(stockCandidates.scanDate, scanDate)];
     if (strategyType !== 'all') {
-      conditions.push(eq(stockCandidates.strategyType, strategyType as 'short_term' | 'long_term' | 'future_mover'));
+      conditions.push(eq(stockCandidates.strategyType, strategyType));
     }
 
     const candidates = await db
@@ -177,10 +352,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error('Growth screener DB error:', err);
-    return NextResponse.json({
-      ok: false,
-      code: 'DATA_UNAVAILABLE',
-      error: 'Growth screener data is unavailable. Check DATABASE_URL, migrations, and worker population.',
-    }, { status: 503 });
+    return liveFallbackResponse(strategyType, limit, 'database_unavailable');
   }
 }
