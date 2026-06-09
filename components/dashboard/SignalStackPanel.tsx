@@ -16,7 +16,6 @@ const MOCK_SIGNALS: Signal[] = [
   { name: 'QQQ IRON CONDOR',  exp: '28 DTE', struct: '495/505 · 535/545', pop: 71, score: 82, tag: 'ENTRY' },
   { name: 'IWM PUT CREDIT',   exp: '35 DTE', struct: '205/200',            pop: 68, score: 78, tag: 'ENTRY' },
   { name: 'SPY CALL DEBIT',   exp: '45 DTE', struct: '585/595',            pop: 54, score: 71, tag: 'WATCH' },
-  { name: 'NVDA STRANGLE',    exp: '21 DTE', struct: '830/910',            pop: 62, score: 69, tag: 'WATCH' },
   { name: 'TSLA PUT SPREAD',  exp: '14 DTE', struct: '320/310',            pop: 58, score: 64, tag: 'WATCH' },
   { name: 'META IRON FLY',    exp: '30 DTE', struct: '590·610',            pop: 46, score: 52, tag: 'WAIT'  },
 ];
@@ -42,7 +41,7 @@ export function SignalStackPanel({ signals = MOCK_SIGNALS }: SignalStackPanelPro
     <Card>
       <CardHeader>
         <CardTitle>Signal Stack</CardTitle>
-        <span className="text-[10px] text-gray-500 font-mono">{signals.length} QUEUED</span>
+        <span className="text-[10px] text-gray-500 font-mono">{signals.length} DEMO QUEUED</span>
       </CardHeader>
       <div className="divide-y divide-sd-line">
         {signals.map((s, i) => (

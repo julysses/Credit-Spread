@@ -54,8 +54,25 @@ export interface MarketConditions {
   realizedVol: number;      // 20-day HV annualized
   impliedVol: number;       // Current IV (VIX/100)
   skew: VolatilitySkew | null;
-  dataConfidence?: 'live' | 'delayed' | 'synthetic' | 'mock' | 'invalid';
+  dataConfidence?: 'live' | 'delayed' | 'derived' | 'synthetic' | 'unavailable' | 'mock' | 'invalid';
   dataWarnings?: string[];
+  providerMode?: 'spx_pro' | 'spy_free' | 'analytics_only';
+  tradeInstrument?: 'SPX' | 'SPY' | null;
+  tradePrice?: number;
+  optionChainSource?: string;
+  optionChain?: {
+    strike: number;
+    expiry: string;
+    daysToExpiry: number;
+    callBid: number;
+    callAsk: number;
+    callIV: number;
+    callDelta: number;
+    putBid: number;
+    putAsk: number;
+    putIV: number;
+    putDelta: number;
+  }[];
 }
 
 export interface SpreadLeg {
@@ -91,7 +108,10 @@ export interface TradeRecommendation {
   warnings: string[];
   confidence: 'high' | 'medium' | 'low';
   decisionStatus?: 'trade_approved' | 'watch_only' | 'no_trade' | 'data_invalid';
-  dataConfidence?: 'live' | 'delayed' | 'synthetic' | 'mock' | 'invalid';
+  dataConfidence?: 'live' | 'delayed' | 'derived' | 'synthetic' | 'unavailable' | 'mock' | 'invalid';
+  providerMode?: 'spx_pro' | 'spy_free' | 'analytics_only';
+  tradeInstrument?: 'SPX' | 'SPY' | null;
+  optionChainSource?: string;
   creditToWidth?: number;
   breakeven?: number;
   accountRiskPct?: number;
@@ -118,6 +138,30 @@ export interface StrategyDecision {
 // Strategy Decision Logic
 // ─────────────────────────────────────────────
 
+function findOptionChainSpread(
+  chain: MarketConditions['optionChain'] | undefined,
+  shortStrike: number,
+  longStrike: number,
+  side: 'put' | 'call',
+) {
+  if (!chain?.length) return null;
+  const nearest = (strike: number) => chain.reduce<NonNullable<MarketConditions['optionChain']>[number] | null>((best, entry) => {
+    const distance = Math.abs(entry.strike - strike);
+    if (distance > 0.51) return best;
+    return !best || distance < Math.abs(best.strike - strike) ? entry : best;
+  }, null);
+
+  const short = nearest(shortStrike);
+  const long = nearest(longStrike);
+  if (!short || !long) return null;
+
+  const shortBid = side === 'put' ? short.putBid : short.callBid;
+  const longAsk = side === 'put' ? long.putAsk : long.callAsk;
+  if (shortBid <= 0 || longAsk <= 0) return null;
+
+  return { short, long };
+}
+
 function minutesUntilMarketClose(timeOfDay: number): number {
   const hours = Math.floor(timeOfDay / 100);
   const minutes = timeOfDay % 100;
@@ -139,7 +183,7 @@ export function selectStrategy(conditions: MarketConditions): StrategyType {
   const { vix, isMacroEventDay, directionalBias, timeOfDay, spxDailyChange, vixRegime } = conditions;
 
   // Rule: never trade invalid or demo-quality data unless explicitly reviewed in paper mode.
-  if (conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock') return 'NO_TRADE';
+  if (conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' || conditions.dataConfidence === 'unavailable') return 'NO_TRADE';
 
   // Rule: Never trade macro event days
   if (isMacroEventDay) return 'NO_TRADE';
@@ -183,7 +227,11 @@ export function constructSpread(
   daysToExpiry: number = 7,
   riskFreeRate: number = 0.05
 ): TradeRecommendation {
-  const { spxPrice, impliedVol, directionalBias } = conditions;
+  const tradePrice = conditions.tradePrice && conditions.tradePrice > 0 ? conditions.tradePrice : conditions.spxPrice;
+  const { impliedVol, directionalBias } = conditions;
+  const spxPrice = tradePrice;
+  const strikeIncrement = conditions.tradeInstrument === 'SPY' ? 1 : 5;
+  const spreadScale = conditions.tradeInstrument === 'SPY' ? 0.1 : 1;
 
   const effectiveDaysToExpiry = daysToExpiry <= 0 ? minutesToTradingDayFraction(minutesUntilMarketClose(conditions.timeOfDay)) : daysToExpiry;
   const T = Math.max(effectiveDaysToExpiry, 0.02) / 365;
@@ -201,7 +249,7 @@ export function constructSpread(
   let spreadWidth: number;
 
   if (strategy === '90_PERCENT_FRAMEWORK') {
-    spreadWidth = 10;
+    spreadWidth = 10 * spreadScale;
     // Place strikes by target short delta, then require expected-move clearance.
     if (directionalBias === 'bearish') {
       spreadType = 'call';
@@ -212,7 +260,7 @@ export function constructSpread(
       return constructIronCondor(conditions, daysToExpiry, riskFreeRate, expMove);
     }
   } else if (strategy === 'MODERN_INCOME') {
-    spreadWidth = 10;
+    spreadWidth = 10 * spreadScale;
     // Only sell one side based on directional bias
     if (directionalBias === 'bearish') {
       spreadType = 'call';
@@ -221,7 +269,7 @@ export function constructSpread(
     }
   } else {
     // VOLATILITY_CRUSH — tighter strikes, intraday expiry
-    spreadWidth = 5;
+    spreadWidth = 5 * spreadScale;
     spreadType = directionalBias === 'bearish' ? 'call' : 'put';
   }
 
@@ -231,21 +279,23 @@ export function constructSpread(
   const targetDelta = strategy === '90_PERCENT_FRAMEWORK' ? 0.10 : strategy === 'MODERN_INCOME' ? 0.16 : 0.12;
   const deltaStrike = strikeByDelta(spxPrice, T, iv, targetDelta, spreadType);
   const expectedMoveStrike = spreadType === 'put'
-    ? Math.round((spxPrice - minDistanceFromSpot) / 5) * 5
-    : Math.round((spxPrice + minDistanceFromSpot) / 5) * 5;
+    ? Math.round((spxPrice - minDistanceFromSpot) / strikeIncrement) * strikeIncrement
+    : Math.round((spxPrice + minDistanceFromSpot) / strikeIncrement) * strikeIncrement;
 
   let shortStrike = spreadType === 'put'
     ? Math.min(deltaStrike, expectedMoveStrike)
     : Math.max(deltaStrike, expectedMoveStrike);
 
-  // Round to nearest 5 for SPX
-  shortStrike = Math.round(shortStrike / 5) * 5;
+  // Round to available-style increment: SPX 5-point, SPY 1-point.
+  shortStrike = Math.round(shortStrike / strikeIncrement) * strikeIncrement;
 
   const longStrike = spreadType === 'put'
     ? shortStrike - spreadWidth
     : shortStrike + spreadWidth;
 
-  // Black-Scholes pricing for each leg
+  const chainEntry = findOptionChainSpread(conditions.optionChain, shortStrike, longStrike, spreadType);
+
+  // Black-Scholes pricing for each leg. Used for probabilities/Greeks and as non-tradeable math fallback only.
   const shortBS = blackScholes({
     S: spxPrice,
     K: shortStrike,
@@ -264,7 +314,13 @@ export function constructSpread(
     optionType: spreadType,
   });
 
-  const credit = Math.max(shortBS.price - longBS.price, 0);
+  const modelCredit = Math.max(shortBS.price - longBS.price, 0);
+  const chainCredit = chainEntry
+    ? spreadType === 'put'
+      ? Math.max(chainEntry.short.putBid - chainEntry.long.putAsk, 0)
+      : Math.max(chainEntry.short.callBid - chainEntry.long.callAsk, 0)
+    : null;
+  const credit = chainCredit ?? modelCredit;
   const creditPerContract = credit * 100;
   const maxLoss = Math.max((spreadWidth - credit) * 100, 0);
   const creditToWidth = spreadWidth > 0 ? credit / spreadWidth : 0;
@@ -311,6 +367,10 @@ export function constructSpread(
   conditionsList.push(`Monte Carlo POP: ${(pop * 100).toFixed(1)}%`);
 
   const warnings: string[] = [...(conditions.dataWarnings ?? [])];
+  if (!chainEntry) warnings.push('Selected strikes not found in live option chain — pricing is not tradeable');
+  if (conditions.tradeInstrument === 'SPY') {
+    warnings.push('SPY free mode: equity option tax treatment, American-style exercise, assignment risk, physical settlement. Close before expiration.');
+  }
   if (conditions.dataConfidence === 'synthetic' || conditions.dataConfidence === 'delayed') warnings.push(`Data confidence is ${conditions.dataConfidence} — paper/verify before entry`);
   if (iv <= conditions.realizedVol) warnings.push('IV not elevated over realized vol');
   if (creditToWidth < 0.12) warnings.push('Credit is below 12% of width — poor payoff quality');
@@ -319,9 +379,9 @@ export function constructSpread(
   if (conditions.technicalSignal === 'at_support' && spreadType === 'put') warnings.push('Near support — avoid put spread');
   if (conditions.technicalSignal === 'at_resistance' && spreadType === 'call') warnings.push('Near resistance — avoid call spread');
 
-  const hardBlock = conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' || evCalc.ev < 0 || creditToWidth < 0.08;
+  const hardBlock = !chainEntry || conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' || conditions.dataConfidence === 'unavailable' || evCalc.ev < 0 || creditToWidth < 0.08;
   const decisionStatus: TradeRecommendation['decisionStatus'] = hardBlock
-    ? (conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' ? 'data_invalid' : 'no_trade')
+    ? (!chainEntry || conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' || conditions.dataConfidence === 'unavailable' ? 'data_invalid' : 'no_trade')
     : warnings.length > 0 || pop < 0.80
       ? 'watch_only'
       : 'trade_approved';
@@ -346,7 +406,9 @@ export function constructSpread(
       action: 'sell',
       delta: shortBS.delta,
       iv: iv,
-      premium: shortBS.price,
+      premium: chainEntry
+        ? spreadType === 'put' ? chainEntry.short.putBid : chainEntry.short.callBid
+        : shortBS.price,
       daysToExpiry,
     },
     longLeg: {
@@ -355,7 +417,9 @@ export function constructSpread(
       action: 'buy',
       delta: longBS.delta,
       iv: iv,
-      premium: longBS.price,
+      premium: chainEntry
+        ? spreadType === 'put' ? chainEntry.long.putAsk : chainEntry.long.callAsk
+        : longBS.price,
       daysToExpiry,
     },
     credit: parseFloat(credit.toFixed(2)),
@@ -375,6 +439,9 @@ export function constructSpread(
     confidence,
     decisionStatus,
     dataConfidence: conditions.dataConfidence ?? 'live',
+    providerMode: conditions.providerMode,
+    tradeInstrument: conditions.tradeInstrument,
+    optionChainSource: conditions.optionChainSource,
     creditToWidth: parseFloat(creditToWidth.toFixed(4)),
     breakeven: parseFloat(breakeven.toFixed(2)),
     accountRiskPct: 0.01,
@@ -463,6 +530,9 @@ function constructIronCondor(
     confidence: pop >= 0.85 && creditToWidth >= 0.12 ? 'high' : 'medium',
     decisionStatus: pop >= 0.85 && creditToWidth >= 0.12 ? 'trade_approved' : 'watch_only',
     dataConfidence: conditions.dataConfidence ?? 'live',
+    providerMode: conditions.providerMode,
+    tradeInstrument: conditions.tradeInstrument,
+    optionChainSource: conditions.optionChainSource,
     creditToWidth: parseFloat(creditToWidth.toFixed(4)),
     breakeven: undefined,
     accountRiskPct: 0.01,
@@ -492,8 +562,11 @@ function buildNoTrade(conditions: MarketConditions): TradeRecommendation {
     conditions: ['Macro event day — standing aside per SOP Rule 3'],
     warnings: ['NO TRADE — macro event risk too high'],
     confidence: 'high',
-    decisionStatus: conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' ? 'data_invalid' : 'no_trade',
+    decisionStatus: conditions.dataConfidence === 'invalid' || conditions.dataConfidence === 'mock' || conditions.dataConfidence === 'unavailable' ? 'data_invalid' : 'no_trade',
     dataConfidence: conditions.dataConfidence ?? 'live',
+    providerMode: conditions.providerMode,
+    tradeInstrument: conditions.tradeInstrument,
+    optionChainSource: conditions.optionChainSource,
     creditToWidth: 0,
     accountRiskPct: 0,
     suggestedContracts: 0,

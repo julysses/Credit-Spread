@@ -364,39 +364,3 @@ export async function buildIntelligenceDossier(
     layer8_aiMemo:        aiMemo,
   };
 }
-
-// ─── Mock Dossier ─────────────────────────────────────────────────────────────
-
-export function getMockDossier(symbol: string): IntelligenceDossier {
-  const fd = {
-    symbol, companyName: `${symbol} Corp`, sector: 'Technology', industry: 'Software',
-    marketCap: 150, revenueGrowthYoy: 28, revenueGrowthQoq: 7, epsGrowthYoy: 35, epsGrowthQoq: 9,
-    grossMargin: 72, operatingMargin: 25, netMargin: 20, fcfMargin: 22,
-    roe: 32, roa: 18, debtToEbitda: 1.2, currentRatio: 2.1, netCash: 500,
-    peRatio: 38, forwardPe: 28, psRatio: 8, pbRatio: 6, evEbitda: 32, pegRatio: 1.4,
-    earningsSurprisePct: 8, earningsSurpriteRate4q: 9, analystTargetPrice: 320, impliedUpside: 22,
-    epsRevisionUp30d: 4, epsRevisionDown30d: 0, nextEarningsDate: '2025-08-15', daysToEarnings: 25,
-  } as FundamentalsData;
-
-  return {
-    symbol, companyName: `${symbol} Corp`, generatedAt: new Date().toISOString(),
-    layer1_fundamentals: fd,
-    layer2_valuation: { peRatio: 38, forwardPe: 28, psRatio: 8, evEbitda: 32, pegRatio: 1.4, impliedUpside: 22, analystTargetPrice: 320, numberOfAnalysts: 18, consensusRating: 'buy' },
-    layer3_news: { recentHeadlines: [{ headline: `${symbol} beats Q2 estimates`, sentiment: 'positive', source: 'Reuters', publishedAt: new Date().toISOString() }], overallSentiment: 'bullish', catalystEvents: ['Upcoming earnings'], macroAlignment: 'AI tailwind' },
-    layer4_institutional: { symbol, institutionalOwnershipPct: 72, hfNetShareChangePct: 3.2, topHolders: [], insiderNetBuyDollars90d: 450000, shortFloatPct: 4.2, shortRatioDaysToCover: 1.8, shortFloatChangePct: -0.5, institutionalScore: 18 },
-    layer5_options: { symbol, flowScore: 10, sentiment: 'bullish', unusualCallCount: 2, unusualPutCount: 0, putCallVolumeRatio: 0.52, putCallOiRatio: 0.65, ivRank: 45, ivPercentile: 48, impliedMoveEarnings: 7, alerts: [] },
-    layer6_technicals: { weeklyTrend: 'above_40w_sma', dailyRSI: 62, macdStatus: 'Bullish crossover 3d ago', keySupport: 240, keyResistance: 290, distFrom52wHighPct: 4.2, relStrengthVsSpy1m: 6.8, relStrengthVsSector1m: 2.1 },
-    layer7_sector: { sectorName: 'Technology', sectorEtf: 'XLK', sectorMomentum1m: 5.2, sectorRank: '#1 of 11', macroTheme: 'AI & Tech tailwind', peers: [{ symbol: 'MSFT', performance1m: 4.1 }, { symbol: 'GOOGL', performance1m: 3.8 }] },
-    layer8_aiMemo: {
-      bullCase: `${symbol} demonstrates accelerating revenue growth with strong FCF generation, positioning it well for continued market share gains. Hedge fund accumulation and insider buying confirm institutional conviction in the thesis.`,
-      bearCase: 'Premium valuation leaves little room for execution errors. Any guidance miss or macro-driven multiple compression could result in significant downside from current levels.',
-      entryStrategy: 'Initiate 2% position on pullbacks to the 20 EMA (~$245). Add on earnings confirmation. Stop-loss below the 50 SMA.',
-      keyCatalysts: '• Earnings in 25 days — consensus expects 8% EPS beat\n• New product cycle announcement\n• Continued AI infrastructure spend',
-      keyRisks: '• Macro headwinds from rate uncertainty\n• Competitive pressure from hyperscalers\n• Margin compression if growth decelerates',
-      targetPriceRange: `$${Math.round(fd.analystTargetPrice * 0.9)} - $${Math.round(fd.analystTargetPrice * 1.1)} over 12 months`,
-      convictionLevel: 'High',
-      fullMemo: '',
-      generatedBy: 'template',
-    },
-  };
-}

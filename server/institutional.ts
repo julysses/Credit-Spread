@@ -1,7 +1,7 @@
 /**
  * Institutional & Smart Money Intelligence
  * Sources: SEC EDGAR 13F filings, FMP insider trades, FINRA short interest
- * Falls back to mock data when APIs are unavailable.
+ * Returns unavailable/neutral data when APIs are unavailable.
  */
 
 import axios from 'axios';
@@ -98,7 +98,7 @@ export async function fetchInstitutionalData(
   insiderNetBuy: number = 0,
   shortFloatPct: number = 0,
 ): Promise<InstitutionalData> {
-  if (!process.env.FMP_API_KEY) return getMockInstitutionalData(symbol);
+  if (!process.env.FMP_API_KEY) return getUnavailableInstitutionalData(symbol);
 
   try {
     // Fetch institutional holders from FMP
@@ -177,7 +177,7 @@ export async function fetchInstitutionalData(
     };
   } catch (err) {
     console.error(`[institutional] Failed for ${symbol}:`, (err as Error).message);
-    return getMockInstitutionalData(symbol);
+    return getUnavailableInstitutionalData(symbol);
   }
 }
 
@@ -212,33 +212,18 @@ export function computeInstitutionalScore(data: {
   return Math.min(25, Math.max(0, score));
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── Unavailable Data ─────────────────────────────────────────────────────────
 
-export function getMockInstitutionalData(symbol: string): InstitutionalData {
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-
-  const ownershipPct  = 50 + (seed % 30);
-  const netChangePct  = (seed % 7) - 2; // -2 to +4
-  const insiderNet    = (seed % 5) * 250_000 - 100_000;
-  const shortFloat    = 2 + (seed % 18);
-
-  const holders: HedgeFundPosition[] = [
-    { fund: 'Vanguard Group', cik: '', shares: 5e6 + seed * 1000, changeShares: seed * 500, changePercent: 2.1, filingDate: '2025-03-31', action: 'increased' },
-    { fund: 'BlackRock', cik: '', shares: 4e6 + seed * 800, changeShares: -seed * 200, changePercent: -0.8, filingDate: '2025-03-31', action: 'decreased' },
-    { fund: 'State Street', cik: '', shares: 2e6 + seed * 500, changeShares: 0, changePercent: 0, filingDate: '2025-03-31', action: 'increased' },
-  ];
-
-  const score = computeInstitutionalScore({ institutionalOwnershipPct: ownershipPct, hfNetShareChangePct: netChangePct, insiderNetBuyDollars90d: insiderNet, shortFloatPct: shortFloat });
-
+export function getUnavailableInstitutionalData(symbol: string): InstitutionalData {
   return {
     symbol,
-    institutionalOwnershipPct: ownershipPct,
-    hfNetShareChangePct:       netChangePct,
-    topHolders:                holders,
-    insiderNetBuyDollars90d:   insiderNet,
-    shortFloatPct:             shortFloat,
-    shortRatioDaysToCover:     shortFloat / 5,
-    shortFloatChangePct:       (seed % 4) - 2,
-    institutionalScore:        score,
+    institutionalOwnershipPct: 0,
+    hfNetShareChangePct: 0,
+    topHolders: [],
+    insiderNetBuyDollars90d: 0,
+    shortFloatPct: 0,
+    shortRatioDaysToCover: 0,
+    shortFloatChangePct: 0,
+    institutionalScore: 0,
   };
 }

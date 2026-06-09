@@ -11,8 +11,8 @@ import { computeDailyFeatures, type DailyFeatures } from './stock-swing-engine';
 import type { FundamentalsData } from '@/server/fundamentals';
 import type { StockFlowSummary, OptionsFlowAlert } from '@/server/options-flow';
 import type { HedgeFundPosition, InstitutionalData } from '@/server/institutional';
-import { getMockFlowSummary } from '@/server/options-flow';
-import { getMockInstitutionalData } from '@/server/institutional';
+import { getUnavailableFlowSummary } from '@/server/options-flow';
+import { getUnavailableInstitutionalData } from '@/server/institutional';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -245,8 +245,8 @@ export function buildGrowthFeatures(
     threeMonthChangePct:  month3 > 0 ? parseFloat(((price - month3) / month3 * 100).toFixed(2)) : 0,
     relStrengthVsSpy1m:   parseFloat((symReturn1m - spyReturn1m).toFixed(2)),
     fundamentals,
-    flow:          flow ?? getMockFlowSummary(symbol),
-    institutional: institutional ?? getMockInstitutionalData(symbol),
+    flow:          flow ?? getUnavailableFlowSummary(symbol),
+    institutional: institutional ?? getUnavailableInstitutionalData(symbol),
   };
 }
 

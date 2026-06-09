@@ -228,6 +228,44 @@ async function fetchFromNewsAPI(): Promise<Partial<NewsItem>[]> {
   }
 }
 
+
+/**
+ * Fetch market news from Finnhub
+ */
+async function fetchFromFinnhub(): Promise<Partial<NewsItem>[]> {
+  const key = process.env.FINNHUB_API_KEY;
+  if (!key) return [];
+
+  try {
+    const resp = await axios.get('https://finnhub.io/api/v1/news', {
+      params: { category: 'general', token: key },
+      timeout: 5000,
+    });
+
+    return (Array.isArray(resp.data) ? resp.data : [])
+      .filter((a: { headline?: string; summary?: string }) => {
+        const text = `${a.headline ?? ''} ${a.summary ?? ''}`.toLowerCase();
+        return /spx|s&p|spy|federal reserve|fed|vix|stock market|nasdaq|dow/.test(text);
+      })
+      .slice(0, 20)
+      .map((a: {
+        datetime?: number;
+        source?: string;
+        headline?: string;
+        summary?: string;
+        url?: string;
+      }) => ({
+        publishedAt: a.datetime ? new Date(a.datetime * 1000).toISOString() : new Date().toISOString(),
+        source: a.source || 'Finnhub',
+        headline: a.headline || '',
+        summary: a.summary || '',
+        url: a.url || '',
+      }));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Analyze a batch of raw news items
  */
@@ -261,15 +299,16 @@ export function processNewsItems(rawItems: Partial<NewsItem>[]): NewsItem[] {
  */
 export async function analyzeNews(): Promise<NewsAnalysis> {
   // Fetch from all sources in parallel, merge, and deduplicate by headline
-  const [gnewsItems, newsApiItems, alphaVantageItems] = await Promise.all([
+  const [gnewsItems, newsApiItems, alphaVantageItems, finnhubItems] = await Promise.all([
     fetchFromGNews(),
     fetchFromNewsAPI(),
     fetchFromAlphaVantage(),
+    fetchFromFinnhub(),
   ]);
 
   const seen = new Set<string>();
   const rawItems: Partial<NewsItem>[] = [];
-  for (const item of [...gnewsItems, ...newsApiItems, ...alphaVantageItems]) {
+  for (const item of [...gnewsItems, ...newsApiItems, ...alphaVantageItems, ...finnhubItems]) {
     const key = (item.headline || '').toLowerCase().slice(0, 60);
     if (key && !seen.has(key)) {
       seen.add(key);
@@ -277,9 +316,8 @@ export async function analyzeNews(): Promise<NewsAnalysis> {
     }
   }
 
-  // If no API keys configured, use demo data
   if (rawItems.length === 0) {
-    return getMockNewsAnalysis();
+    return getUnavailableNewsAnalysis();
   }
 
   const items = processNewsItems(rawItems);
@@ -327,43 +365,14 @@ export async function analyzeNews(): Promise<NewsAnalysis> {
   };
 }
 
-export function getMockNewsAnalysis(): NewsAnalysis {
+export function getUnavailableNewsAnalysis(): NewsAnalysis {
   return {
-    items: [
-      {
-        id: 'news_1',
-        publishedAt: new Date().toISOString(),
-        source: 'Reuters',
-        headline: 'Fed holds rates steady, signals patience on cuts',
-        summary: 'Federal Reserve maintains federal funds rate target, indicating data-dependent approach.',
-        url: '#',
-        sentiment: 'neutral',
-        sentimentScore: 0.0,
-        geopoliticalRisk: false,
-        macroRelevance: true,
-        riskImpact: 'medium',
-        tags: ['fed', 'rates'],
-      },
-      {
-        id: 'news_2',
-        publishedAt: new Date().toISOString(),
-        source: 'Bloomberg',
-        headline: 'SPX holds above key 5800 support after mixed jobs data',
-        summary: 'Markets show resilience as employment numbers come in close to expectations.',
-        url: '#',
-        sentiment: 'neutral',
-        sentimentScore: 0.1,
-        geopoliticalRisk: false,
-        macroRelevance: true,
-        riskImpact: 'low',
-        tags: ['spx', 'jobs'],
-      },
-    ],
+    items: [],
     overallSentiment: 'neutral',
-    overallScore: 0.05,
+    overallScore: 0,
     geopoliticalRiskLevel: 'low',
-    macroRiskLevel: 'medium',
-    keyRisks: [],
-    tradeabilityScore: 72,
+    macroRiskLevel: 'low',
+    keyRisks: ['News unavailable'],
+    tradeabilityScore: 50,
   };
 }

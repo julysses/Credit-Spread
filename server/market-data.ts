@@ -6,6 +6,7 @@
 
 import axios from 'axios';
 import { fetchAlpacaSnapshots, snapshotToQuote, alpacaConfigured } from './alpaca';
+import { fetchYahooOptionChain } from './yahoo-options';
 
 export interface MarketQuote {
   symbol: string;
@@ -39,6 +40,9 @@ export interface OptionChainEntry {
   putOI: number;
 }
 
+export type ProviderMode = 'spx_pro' | 'spy_free' | 'analytics_only';
+export type TradeInstrument = 'SPX' | 'SPY' | null;
+
 export interface MarketDataSnapshot {
   spx: MarketQuote;
   spy: MarketQuote;
@@ -48,6 +52,12 @@ export interface MarketDataSnapshot {
   isMarketOpen: boolean;
   realizedVol?: number;         // 20-day annualized HV (0-1 decimal, e.g. 0.14 = 14%)
   sources?: Record<string, string>;
+  providerMode: ProviderMode;
+  tradeInstrument: TradeInstrument;
+  tradeable: boolean;
+  assignmentRisk: boolean;
+  taxTreatment: 'section_1256' | 'equity_option' | 'unknown';
+  optionChainSource: string;
 }
 
 // ─────────────────────────────────────────────
@@ -293,6 +303,49 @@ async function fetchAlphaVantageQuote(symbol: string): Promise<MarketQuote | nul
   }
 }
 
+
+// ─────────────────────────────────────────────
+// Finnhub (free backup for quotes)
+// ─────────────────────────────────────────────
+
+const FINNHUB_SYMBOL_MAP: Record<string, string> = { SPX: '^GSPC', VIX: '^VIX', SPY: 'SPY' };
+
+async function fetchFinnhubQuote(appSymbol: 'SPX' | 'VIX' | 'SPY'): Promise<MarketQuote | null> {
+  const key = process.env.FINNHUB_API_KEY;
+  if (!key) return null;
+
+  try {
+    const symbol = FINNHUB_SYMBOL_MAP[appSymbol];
+    const resp = await axios.get('https://finnhub.io/api/v1/quote', {
+      params: { symbol, token: key },
+      timeout: 5000,
+    });
+
+    const q = resp.data;
+    const price = Number(q?.c ?? 0);
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    const previousClose = Number(q?.pc ?? price);
+    const change = Number(q?.d ?? price - previousClose);
+    const changePct = Number(q?.dp ?? (previousClose ? change / previousClose * 100 : 0));
+
+    return {
+      symbol: appSymbol,
+      price,
+      change: Number.isFinite(change) ? change : 0,
+      changePct: Number.isFinite(changePct) ? changePct : 0,
+      high: Number(q?.h ?? price) || price,
+      low: Number(q?.l ?? price) || price,
+      open: Number(q?.o ?? price) || price,
+      volume: 0,
+      timestamp: q?.t ? Number(q.t) * 1000 : Date.now(),
+    };
+  } catch (err) {
+    console.error(`Finnhub quote failed (${appSymbol}):`, (err as Error).message);
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────
 // Realized Volatility (20-day HV, annualized)
 // Primary: Yahoo Finance daily history (free, no auth)
@@ -442,18 +495,24 @@ export function getNextExpiry(daysOut: number = 7): string {
 export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   const expiry = getNextExpiry(7);
 
-  // Fetch MarketData.app (indices + options chain), Alpaca SPY, and realized vol in parallel
-  const [spxRaw, vixRaw, spyRaw, rawOptionChain, alpacaSnaps, rvResult] = await Promise.all([
+  // Fetch MarketData.app (indices + SPX chain), Yahoo SPY chain, Alpaca SPY, and realized vol in parallel.
+  const [spxRaw, vixRaw, spyRaw, rawSpxOptionChain, rawSpyOptionChain, alpacaSnaps, rvResult] = await Promise.all([
     fetchMDIndexQuote('SPX'),
     fetchMDIndexQuote('VIX'),
     fetchMDStockQuote('SPY'),
     fetchMDOptionChain('SPX', expiry),
+    fetchYahooOptionChain('SPY', 7),
     alpacaConfigured() ? fetchAlpacaSnapshots(['SPY']) : Promise.resolve(new Map()),
     fetchRealizedVol(),
   ]);
 
-  // Apply liquidity filter to option chain
-  const { filtered: optionChain, quality: chainQuality } = filterLiquidChain(rawOptionChain);
+  const { filtered: spxOptionChain, quality: spxChainQuality } = filterLiquidChain(rawSpxOptionChain);
+  const { filtered: spyOptionChain, quality: spyChainQuality } = filterLiquidChain(rawSpyOptionChain);
+  const providerMode: ProviderMode = spxOptionChain.length > 0 ? 'spx_pro' : spyOptionChain.length > 0 ? 'spy_free' : 'analytics_only';
+  const tradeInstrument: TradeInstrument = providerMode === 'spx_pro' ? 'SPX' : providerMode === 'spy_free' ? 'SPY' : null;
+  const optionChain = providerMode === 'spx_pro' ? spxOptionChain : providerMode === 'spy_free' ? spyOptionChain : [];
+  const chainQuality = providerMode === 'spx_pro' ? spxChainQuality : providerMode === 'spy_free' ? spyChainQuality : 'missing';
+  const optionChainSource = providerMode === 'spx_pro' ? `MarketData SPX (${spxChainQuality})` : providerMode === 'spy_free' ? `Yahoo Finance SPY (${spyChainQuality}, delayed/unofficial)` : 'unavailable — configure MARKETDATA_API_KEY or set ENABLE_YAHOO_OPTIONS=true for experimental Yahoo SPY options';
 
   // Alpaca SPY — most reliable real-time source for stock quotes
   const alpacaSpy = alpacaSnaps.get('SPY');
@@ -468,12 +527,21 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
   // SPY: skip Yahoo if Alpaca already has it
   if (!alpacaSpyQuote && (!spyRaw || spyRaw.price === 0)) needsYahoo.push('SPY');
 
-  // Fallback: Yahoo Finance (free, no auth, real-time)
+  // Fallback: Yahoo Finance (free, no auth, delayed/unofficial)
   const yahooData = needsYahoo.length > 0
     ? await fetchYahooQuotes(needsYahoo)
     : new Map<string, MarketQuote>();
 
-  // Fallback chain for SPY: Alpaca → MarketData → Yahoo → Alpha Vantage
+  const needsFinnhub = needsYahoo.filter(symbol => !yahooData.get(symbol));
+  const finnhubResults = needsFinnhub.length > 0
+    ? await Promise.all(needsFinnhub.map(symbol => fetchFinnhubQuote(symbol).then(q => ({ symbol, q }))))
+    : [];
+  const finnhubData = new Map<string, MarketQuote>();
+  for (const { symbol, q } of finnhubResults) {
+    if (q) finnhubData.set(symbol, q);
+  }
+
+  // Fallback chain for SPY: Alpaca → MarketData → Yahoo → Finnhub → Alpha Vantage
   let spyData: MarketQuote | null = null;
   if (alpacaSpyQuote && alpacaSpyQuote.price > 0) {
     spyData = {
@@ -491,33 +559,22 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     spyData = spyRaw;
   } else if (yahooData.get('SPY')) {
     spyData = yahooData.get('SPY') ?? null;
+  } else if (finnhubData.get('SPY')) {
+    spyData = finnhubData.get('SPY') ?? null;
   } else {
     spyData = await fetchAlphaVantageQuote('SPY');
   }
   const spyPrice = spyData?.price ?? 0;
 
-  // SPX: MarketData → Yahoo → SPY×10.05 estimate
-  const spxSource = (spxRaw && spxRaw.price > 0) ? spxRaw : yahooData.get('SPX') ?? null;
-  const spxPrice = spxSource?.price ?? (spyPrice > 0 ? spyPrice * 10.05 : 5800);
-  if (!spxSource) console.warn('SPX: using SPY-derived estimate');
+  // SPX: MarketData → Yahoo delayed. No synthetic/default price in production.
+  const spxSource = (spxRaw && spxRaw.price > 0) ? spxRaw : yahooData.get('SPX') ?? finnhubData.get('SPX') ?? null;
+  const spxPrice = spxSource?.price ?? 0;
+  if (!spxSource) console.warn('SPX: unavailable from MarketData/Yahoo');
 
-  // VIX: MarketData → Yahoo → ATM IV derivation → hardcoded 18
-  let vixSource = (vixRaw && vixRaw.price > 0) ? vixRaw : yahooData.get('VIX') ?? null;
-  let vixValue = vixSource?.price ?? 0;
-  if (!vixValue && optionChain.length > 0) {
-    const atmOptions = optionChain.filter(
-      o => Math.abs(o.strike - spxPrice) / spxPrice < 0.015 && o.putIV > 0
-    );
-    if (atmOptions.length > 0) {
-      const avgIV = atmOptions.reduce((s, o) => s + o.putIV, 0) / atmOptions.length;
-      vixValue = parseFloat((avgIV * 100).toFixed(2));
-      console.log(`VIX derived from ATM put IV: ${vixValue}`);
-    }
-  }
-  if (!vixValue) {
-    console.warn('VIX: all sources failed — hardcoded fallback 18');
-    vixValue = 18;
-  }
+  // VIX: MarketData → Yahoo delayed. No hardcoded/default VIX in production.
+  const vixSource = (vixRaw && vixRaw.price > 0) ? vixRaw : yahooData.get('VIX') ?? finnhubData.get('VIX') ?? null;
+  const vixValue = vixSource?.price ?? 0;
+  if (!vixSource) console.warn('VIX: unavailable from MarketData/Yahoo');
 
   const yahooSpx = yahooData.get('SPX');
   // Use live SPX/SPY ratio to estimate SPX H/L from Alpaca SPY bars (reliable fallback)
@@ -540,7 +597,7 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
 
   const spyQuote: MarketQuote = {
     symbol: 'SPY',
-    price: spyPrice || 580,
+    price: spyPrice,
     change: spyData?.change ?? 0,
     changePct: spyData?.changePct ?? 0,
     high: spyData?.high ?? 0,
@@ -562,10 +619,10 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
     timestamp: Date.now(),
   };
 
-  const spxSourceLabel = spxSource ? (spxRaw?.price ? 'MarketData' : 'Yahoo delayed') : 'SPY-derived synthetic estimate';
-  const vixSourceLabel = vixSource ? (vixRaw?.price ? 'MarketData' : 'Yahoo delayed') : (optionChain.length > 0 ? 'option-chain derived estimate' : 'hardcoded fallback 18');
-  const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MarketData' : yahooData.get('SPY') ? 'Yahoo delayed' : 'Alpha Vantage delayed';
-  const rvSource = rvResult ? rvResult.source : 'synthetic (IV × 0.85)';
+  const spxSourceLabel = spxSource ? (spxRaw?.price ? 'MarketData' : yahooData.get('SPX') ? 'Yahoo delayed' : 'Finnhub delayed') : 'unavailable';
+  const vixSourceLabel = vixSource ? (vixRaw?.price ? 'MarketData' : yahooData.get('VIX') ? 'Yahoo delayed' : 'Finnhub delayed') : 'unavailable';
+  const spySource = (alpacaSpyQuote && alpacaSpyQuote.price > 0) ? 'Alpaca' : spyRaw?.price ? 'MarketData' : yahooData.get('SPY') ? 'Yahoo delayed' : finnhubData.get('SPY') ? 'Finnhub delayed' : spyData ? 'Alpha Vantage delayed' : 'unavailable';
+  const rvSource = rvResult ? rvResult.source : 'unavailable';
   console.log(`Market snapshot: SPX=${spxPrice} VIX=${vixValue} SPY=${spyPrice} | sources: SPX=${spxSourceLabel} VIX=${vixSourceLabel} SPY=${spySource} RV=${rvSource} chain=${chainQuality}`);
 
   return {
@@ -580,62 +637,17 @@ export async function fetchMarketSnapshot(): Promise<MarketDataSnapshot> {
       spx: spxSourceLabel,
       vix: vixSourceLabel,
       spy: spySource,
-      optionChain: optionChain.length > 0 ? `MarketData (${chainQuality})` : 'missing fallback',
+      optionChain: optionChain.length > 0 ? optionChainSource : 'unavailable',
       optionChainLiquidity: chainQuality,
       realizedVol: rvSource,
+      providerMode,
+      tradeInstrument: tradeInstrument ?? 'none',
     },
-  };
-}
-
-/**
- * Mock data for development/demo when API keys not configured
- */
-export function getMockMarketData(): MarketDataSnapshot {
-  const spxPrice = 5820 + (Math.random() - 0.5) * 50;
-
-  const chain: OptionChainEntry[] = [];
-  const expiry = getNextExpiry(7);
-  const dte = 7;
-
-  for (let strike = spxPrice - 200; strike <= spxPrice + 200; strike += 5) {
-    const moneyness = Math.abs(strike - spxPrice) / spxPrice;
-    const baseIV = 0.18 + moneyness * 0.1;
-    const putSkew = strike < spxPrice ? 0.02 * ((spxPrice - strike) / 50) : 0;
-
-    chain.push({
-      strike: Math.round(strike / 5) * 5,
-      expiry,
-      daysToExpiry: dte,
-      callBid: Math.max(0, (spxPrice - strike) * 0.01 + 2),
-      callAsk: Math.max(0, (spxPrice - strike) * 0.01 + 2.2),
-      callLast: Math.max(0, (spxPrice - strike) * 0.01 + 2.1),
-      callIV: baseIV,
-      callDelta: strike > spxPrice ? -0.2 : 0.5,
-      callVolume: Math.floor(Math.random() * 1000),
-      callOI: Math.floor(Math.random() * 5000),
-      putBid: Math.max(0, (strike - spxPrice) * 0.01 + 2),
-      putAsk: Math.max(0, (strike - spxPrice) * 0.01 + 2.2),
-      putLast: Math.max(0, (strike - spxPrice) * 0.01 + 2.1),
-      putIV: baseIV + putSkew,
-      putDelta: strike < spxPrice ? -0.2 : -0.05,
-      putVolume: Math.floor(Math.random() * 1200),
-      putOI: Math.floor(Math.random() * 6000),
-    });
-  }
-
-  return {
-    spx: { symbol: 'SPX', price: spxPrice, change: -12.5, changePct: -0.21, high: spxPrice + 20, low: spxPrice - 30, open: spxPrice + 5, volume: 0, timestamp: Date.now() },
-    spy: { symbol: 'SPY', price: spxPrice / 10, change: -1.2, changePct: -0.21, high: (spxPrice + 20) / 10, low: (spxPrice - 30) / 10, open: (spxPrice + 5) / 10, volume: 85000000, timestamp: Date.now() },
-    vix: { symbol: 'VIX', price: 18.5, change: 0.8, changePct: 4.5, high: 19.2, low: 17.8, open: 17.7, volume: 0, timestamp: Date.now() },
-    optionChain: chain,
-    fetchedAt: Date.now(),
-    isMarketOpen: isMarketOpen(),
-    sources: {
-      spx: 'mock',
-      spy: 'mock',
-      vix: 'mock',
-      optionChain: 'mock',
-      realizedVol: 'mock',
-    },
+    providerMode,
+    tradeInstrument,
+    tradeable: optionChain.length > 0 && tradeInstrument !== null,
+    assignmentRisk: tradeInstrument === 'SPY',
+    taxTreatment: tradeInstrument === 'SPX' ? 'section_1256' : tradeInstrument === 'SPY' ? 'equity_option' : 'unknown',
+    optionChainSource,
   };
 }

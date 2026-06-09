@@ -1,7 +1,7 @@
 /**
  * Daily Growth Screener Worker
  * Runs at 6:00 AM ET — surfaces momentum, value+growth, and future mover candidates.
- * Uses mock data when API keys are absent; live data flows in once keys are configured.
+ * Uses unavailable data when API keys are absent; live data flows in once keys are configured.
  */
 
 import { db } from '@/database/db';
@@ -23,7 +23,7 @@ import {
   fetchBulkGradesConsensus,
   fetchBulkPriceTargets,
   fetchBulkIncomeGrowth,
-  getMockFundamentals,
+  getUnavailableFundamentals,
   fmpConfigured,
 } from '@/server/fundamentals';
 import { fetchMarketContext } from '@/server/sector-data';
@@ -54,11 +54,12 @@ function alpacaToOHLCV(b: AlpacaBar): OHLCVBar {
 }
 
 async function fetchAlpacaBars(symbols: string[], days = 60): Promise<Map<string, OHLCVBar[]>> {
-  const { ALPACA_API_KEY, ALPACA_SECRET_KEY } = process.env;
+  const ALPACA_API_KEY = process.env.ALPACA_API_KEY;
+  const ALPACA_API_SECRET = process.env.ALPACA_API_SECRET ?? process.env.ALPACA_SECRET_KEY;
   const result = new Map<string, OHLCVBar[]>();
 
-  if (!ALPACA_API_KEY || !ALPACA_SECRET_KEY) {
-    for (const sym of symbols) result.set(sym, generateMockBars(sym, days));
+  if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
+    console.warn('[screener] Alpaca credentials unavailable — no synthetic bars generated');
     return result;
   }
 
@@ -81,7 +82,7 @@ async function fetchAlpacaBars(symbols: string[], days = 60): Promise<Map<string
         },
         headers: {
           'APCA-API-KEY-ID':     ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY,
+          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
         },
         timeout: 20000,
       });
@@ -92,35 +93,13 @@ async function fetchAlpacaBars(symbols: string[], days = 60): Promise<Map<string
       }
     } catch (err) {
       console.warn(`[screener] Alpaca batch ${i}–${i + CHUNK} failed:`, (err as Error).message);
-      for (const sym of chunk) if (!result.has(sym)) result.set(sym, generateMockBars(sym, days));
+      // Do not synthesize bars. Missing symbols are skipped downstream.
     }
 
     if (i + CHUNK < symbols.length) await sleep(500);
   }
 
   return result;
-}
-
-function generateMockBars(symbol: string, days: number): OHLCVBar[] {
-  const seed  = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const base  = 50 + (seed % 400);
-  const bars: OHLCVBar[] = [];
-  let price   = base;
-
-  for (let i = days; i >= 0; i--) {
-    const ts     = Math.floor((Date.now() - i * 86400000) / 1000);
-    const change = (Math.random() - 0.47) * 0.025;
-    price        = price * (1 + change);
-    bars.push({
-      timestamp: ts,
-      open:   parseFloat((price * 0.998).toFixed(2)),
-      high:   parseFloat((price * 1.012).toFixed(2)),
-      low:    parseFloat((price * 0.988).toFixed(2)),
-      close:  parseFloat(price.toFixed(2)),
-      volume: Math.floor(1e6 + seed * 5000 * Math.random()),
-    });
-  }
-  return bars;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -184,7 +163,10 @@ async function run() {
   // ── Phase 3: Technical Bars for All Tickers ────────────────────────────────
   console.log('[screener] Phase 3 — fetching bars for', ALL_GROWTH_SYMBOLS.length, 'tickers');
   const allBars = await fetchAlpacaBars(ALL_GROWTH_SYMBOLS, 252);
-  const spyBars  = allBars.get('SPY') ?? generateMockBars('SPY', 252);
+  const spyBars  = allBars.get('SPY');
+  if (!spyBars || spyBars.length < 20) {
+    throw new Error('SPY bars unavailable from Alpaca — growth scan blocked');
+  }
 
   // ── Phase 4: Build Features & Initial Scoring ──────────────────────────────
   console.log('[screener] Phase 4 — scoring features');
@@ -196,7 +178,7 @@ async function run() {
     longScore: ReturnType<typeof scoreLongTermValueGrowth>;
     futureScore: ReturnType<typeof scoreFutureMover>;
     composite: number;
-    fundamentals: ReturnType<typeof getMockFundamentals>;
+    fundamentals: ReturnType<typeof getUnavailableFundamentals>;
   }
 
   const scored: ScoredEntry[] = [];
@@ -215,7 +197,7 @@ async function run() {
       const pt  = bulkTargets.get(symbol);
       const grd = bulkGrades.get(symbol);
 
-      const fundsBase = getMockFundamentals(symbol);
+      const fundsBase = getUnavailableFundamentals(symbol);
 
       const fundamentals = {
         ...fundsBase,
@@ -241,7 +223,7 @@ async function run() {
         analystSellCount:     (grd?.sell ?? 0) + (grd?.strongSell ?? 0),
         daysToEarnings:       earningsMap.get(symbol) ?? null,
         nextEarningsDate:     null,
-      } as ReturnType<typeof getMockFundamentals> & {
+      } as ReturnType<typeof getUnavailableFundamentals> & {
         piotroskiScore: number;
         altmanZScore: number;
         analystBuyCount: number;
@@ -320,7 +302,7 @@ async function run() {
       entry.longScore  = scoreLongTermValueGrowth(entry.features);
       entry.composite  = Math.max(entry.shortScore.total, entry.longScore.total, entry.futureScore.total);
     } catch {
-      // keep existing mock data
+      // keep existing unavailable data
     }
     await sleep(200);
   }

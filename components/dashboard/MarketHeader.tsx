@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { useLiveTick } from '@/lib/hooks/use-live-tick';
 import { LiveNumber } from '@/components/ui/live-number';
 
 export type DashTab =
@@ -80,9 +79,12 @@ export function MarketHeader({
   isLoading,
   dataConfidence = 'live',
 }: MarketHeaderProps) {
-  const [spxLive, spxDir] = useLiveTick(spxPrice || 5823, 0.00025, 1500);
-  const [spyLive, spyDir] = useLiveTick((spxPrice || 5823) * 0.0998, 0.00025, 1700);
-  const [vixLive, vixDir] = useLiveTick(vix || 17.4, 0.002, 1900);
+  const spxLive = spxPrice;
+  const spyLive = spxPrice * 0.0998;
+  const vixLive = vix;
+  const spxDir: 'up' | 'down' | 'flat' = 'flat';
+  const spyDir: 'up' | 'down' | 'flat' = 'flat';
+  const vixDir: 'up' | 'down' | 'flat' = 'flat';
 
   const [clock, setClock] = useState('');
   useEffect(() => {

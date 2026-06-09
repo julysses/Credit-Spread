@@ -4,23 +4,7 @@ import { useState, useEffect } from 'react';
 import { ScoreRing } from './ScoreRing';
 import { SignalBadge } from './SignalBadge';
 import { StockDossierModal } from './StockDossierModal';
-
-interface Candidate {
-  id: number;
-  symbol: string;
-  companyName?: string;
-  sector?: string;
-  compositeScore?: number;
-  momentumScore?: number;
-  growthScore?: number;
-  price?: string;
-  priceChangePct?: string;
-  rsi?: string;
-  revenueGrowthPct?: string;
-  above200sma?: boolean;
-  aiThesis?: string | null;
-  signals?: Record<string, unknown>;
-}
+import { ageLabel, money, num, pct, priceStatusLabel, type EnrichedGrowthCandidate as Candidate } from './card-utils';
 
 interface FlowAlert {
   id: number;
@@ -90,7 +74,7 @@ export function FutureMoverPanel() {
       )}
 
       {selected && (
-        <StockDossierModal candidate={selected} onClose={() => setSelected(null)} />
+        <StockDossierModal candidate={selected as any} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -103,6 +87,9 @@ function FutureCard({ candidate: c, onClick }: { candidate: Candidate; onClick: 
   const maSignal          = signals?.maSignal          as boolean | undefined;
   const analystUpgrade    = signals?.analystUpgrade    as boolean | undefined;
   const unusualCallSweep  = signals?.unusualCallSweep  as boolean | undefined;
+  const currentPrice = c.currentPrice ?? c.price;
+  const priceChange = num(c.currentPriceChangePct ?? c.priceChangePct);
+  const entryReturn = c.entryReturnPct;
 
   return (
     <button
@@ -113,9 +100,20 @@ function FutureCard({ candidate: c, onClick }: { candidate: Candidate; onClick: 
         <div>
           <div className="text-base font-bold text-gray-100">{c.symbol}</div>
           {c.companyName && <div className="text-[9px] text-gray-500 truncate max-w-[140px]">{c.companyName}</div>}
-          <div className="font-mono text-sm text-gray-200 mt-1">${c.price}</div>
+          <div className="font-mono text-sm text-gray-200 mt-1">{money(currentPrice)}</div>
+          <div className={`font-mono text-[10px] ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)}%
+          </div>
         </div>
         <ScoreRing score={c.compositeScore ?? 0} size={50} label="PRED" />
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-[9px] text-gray-500 font-mono">
+        <span>{priceStatusLabel(c)}</span>
+        <span>•</span>
+        <span>{ageLabel(c)}</span>
+        <span>•</span>
+        <span>{pct(entryReturn)} from entry</span>
       </div>
 
       <div className="flex flex-wrap gap-1.5">

@@ -1,7 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/database/db';
-import { stockCandidates, growthScans } from '@/database/schema';
-import { eq, and, desc, gte } from 'drizzle-orm';
+import { stockCandidates, growthScans, intelligenceDossiers } from '@/database/schema';
+import { eq, and, desc, inArray } from 'drizzle-orm';
+import { fetchLiveStockQuotes } from '@/server/stock-quotes';
+import { fetchPoliticianSignal } from '@/server/politicians/politician-signals';
+
+export const dynamic = 'force-dynamic';
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : null;
+}
+
+function asNumber(value: unknown): number | undefined {
+  const num = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function formatAvailableFor(value: Date | string | null | undefined): string {
+  if (!value) return 'unknown';
+  const ts = new Date(value).getTime();
+  if (!Number.isFinite(ts)) return 'unknown';
+  const minutes = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function latestBySymbol<T extends { symbol: string; dossierDate?: string | null; createdAt?: Date | null }>(rows: T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    const existing = map.get(row.symbol);
+    const rowTime = new Date(row.createdAt ?? row.dossierDate ?? 0).getTime();
+    const existingTime = existing ? new Date(existing.createdAt ?? existing.dossierDate ?? 0).getTime() : -Infinity;
+    if (!existing || rowTime > existingTime) map.set(row.symbol, row);
+  }
+  return map;
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -10,7 +48,6 @@ export async function GET(req: NextRequest) {
     const date         = searchParams.get('date');
     const limit        = Math.min(parseInt(searchParams.get('limit') ?? '20'), 50);
 
-    // Get the most recent scan date if none provided
     let scanDate = date;
     if (!scanDate) {
       const latestScan = await db
@@ -19,7 +56,20 @@ export async function GET(req: NextRequest) {
         .orderBy(desc(growthScans.scanDate))
         .limit(1)
         .execute();
-      scanDate = latestScan[0]?.scanDate ?? new Date().toISOString().split('T')[0];
+      scanDate = latestScan[0]?.scanDate ?? null;
+    }
+
+    if (!scanDate) {
+      return NextResponse.json({
+        ok: true,
+        data: {
+          scanDate: null,
+          scan: null,
+          candidates: [],
+          count: 0,
+          emptyReason: 'no_scan_data',
+        },
+      });
     }
 
     const conditions = [eq(stockCandidates.scanDate, scanDate)];
@@ -42,60 +92,95 @@ export async function GET(req: NextRequest) {
       .limit(1)
       .execute();
 
+    const symbols = candidates.map(c => c.symbol);
+    const [liveQuotes, dossierRows, politicianRows] = await Promise.all([
+      fetchLiveStockQuotes(symbols).catch(() => new Map()),
+      symbols.length > 0
+        ? db.select().from(intelligenceDossiers).where(inArray(intelligenceDossiers.symbol, symbols)).orderBy(desc(intelligenceDossiers.dossierDate), desc(intelligenceDossiers.createdAt)).limit(Math.max(symbols.length * 3, 10)).execute().catch(() => [])
+        : Promise.resolve([]),
+      Promise.allSettled(symbols.map(symbol => fetchPoliticianSignal(symbol))),
+    ]);
+
+    const dossiers = latestBySymbol(dossierRows);
+    const politicians = new Map<string, Awaited<ReturnType<typeof fetchPoliticianSignal>>>();
+    politicianRows.forEach((result, index) => {
+      if (result.status === 'fulfilled') politicians.set(symbols[index], result.value);
+    });
+
+    const hydratedCandidates = candidates.map(candidate => {
+      const liveQuote = liveQuotes.get(candidate.symbol);
+      const dossier = dossiers.get(candidate.symbol);
+      const institutionalData = asRecord(dossier?.institutionalData);
+      const fundamentalsData = asRecord(dossier?.fundamentalsData);
+      const valuationData = asRecord(dossier?.valuationData);
+      const signals = asRecord(candidate.signals);
+      const politician = politicians.get(candidate.symbol);
+      const entryPrice = candidate.price;
+      const currentPrice = liveQuote?.price ?? candidate.price;
+      const entryReturnPct = entryPrice && currentPrice ? ((currentPrice - entryPrice) / entryPrice) * 100 : null;
+      const piotroskiScore = asNumber(institutionalData?.piotroskiScore) ?? asNumber(fundamentalsData?.piotroskiScore) ?? asNumber(signals?.piotroskiScore);
+      const altmanZScore = asNumber(institutionalData?.altmanZScore) ?? asNumber(fundamentalsData?.altmanZScore) ?? asNumber(signals?.altmanZScore);
+
+      return {
+        ...candidate,
+        scanPrice: candidate.price,
+        scanPriceChangePct: candidate.priceChangePct,
+        entryPrice,
+        currentPrice,
+        currentPriceChangePct: liveQuote?.changePct ?? candidate.priceChangePct,
+        entryReturnPct,
+        availableSince: candidate.createdAt,
+        availableForLabel: formatAvailableFor(candidate.createdAt),
+        price: currentPrice,
+        priceChangePct: liveQuote?.changePct ?? candidate.priceChangePct,
+        priceStatus: liveQuote?.status ?? 'persisted',
+        priceProvider: liveQuote?.provider ?? 'database_scan',
+        priceAsOf: liveQuote?.timestamp ? new Date(liveQuote.timestamp).toISOString() : candidate.createdAt,
+        currentPriceStatus: liveQuote?.status ?? 'persisted',
+        currentPriceProvider: liveQuote?.provider ?? 'database_scan',
+        currentPriceAsOf: liveQuote?.timestamp ? new Date(liveQuote.timestamp).toISOString() : candidate.createdAt,
+        piotroskiScore,
+        altmanZScore,
+        analystTargetPrice: asNumber(valuationData?.analystTargetPrice) ?? asNumber(valuationData?.targetPriceMean),
+        politicianScore: politician?.score,
+        politicianRecentBuys: politician?.recentBuys,
+        politicianRecentSells: politician?.recentSells,
+        politicianNetFlow: politician?.netFlow,
+        politicianLargestTradeRange: politician?.largestTradeRange,
+        politicianExplanation: politician?.explanation,
+        sources: {
+          price: liveQuote ? {
+            status: liveQuote.status,
+            provider: liveQuote.provider,
+            fetchedAt: liveQuote.timestamp,
+          } : {
+            status: 'persisted',
+            provider: 'database_scan',
+            asOf: candidate.createdAt,
+          },
+          piotroskiScore: piotroskiScore != null ? { status: 'persisted', provider: dossier ? 'intelligence_dossier' : 'candidate_signals', asOf: dossier?.createdAt ?? candidate.createdAt } : { status: 'unavailable', provider: 'none' },
+          altmanZScore: altmanZScore != null ? { status: 'persisted', provider: dossier ? 'intelligence_dossier' : 'candidate_signals', asOf: dossier?.createdAt ?? candidate.createdAt } : { status: 'unavailable', provider: 'none' },
+          politician: politician ? { status: 'delayed', provider: 'congressional_disclosures', fetchedAt: Date.now() } : { status: 'unavailable', provider: 'none' },
+        },
+      };
+    });
+
     return NextResponse.json({
       ok: true,
       data: {
         scanDate,
         scan:       scan[0] ?? null,
-        candidates,
-        count:      candidates.length,
+        candidates: hydratedCandidates,
+        count:      hydratedCandidates.length,
+        emptyReason: hydratedCandidates.length === 0 ? 'no_candidates_for_scan' : null,
       },
     });
   } catch (err) {
-    // Return mock data on DB errors (dev mode without DB)
-    const scanDate = new Date().toISOString().split('T')[0];
+    console.error('Growth screener DB error:', err);
     return NextResponse.json({
-      ok: true,
-      data: {
-        scanDate,
-        scan: { scanDate, totalScreened: 300, shortTermCount: 8, longTermCount: 7, futureMoverCount: 3, marketRegime: 'neutral' },
-        candidates: getMockCandidates(searchParams.get('type') ?? 'short_term'),
-        count: 10,
-        _mock: true,
-      },
-    });
+      ok: false,
+      code: 'DATA_UNAVAILABLE',
+      error: 'Growth screener data is unavailable. Check DATABASE_URL, migrations, and worker population.',
+    }, { status: 503 });
   }
-}
-
-function getMockCandidates(type: string) {
-  const base = [
-    { symbol: 'NVDA', companyName: 'NVIDIA Corp',     sector: 'Technology',  compositeScore: 88, momentumScore: 88, price: '875.42', priceChangePct: '4.21', rsi: '67.3', revenueGrowthPct: '122.4', pegRatio: '1.8' },
-    { symbol: 'CRWD', companyName: 'CrowdStrike',     sector: 'Technology',  compositeScore: 79, momentumScore: 79, price: '380.15', priceChangePct: '3.82', rsi: '65.1', revenueGrowthPct: '33.2',  pegRatio: '2.1' },
-    { symbol: 'AXON', companyName: 'Axon Enterprise', sector: 'Industrials', compositeScore: 74, momentumScore: 74, price: '310.20', priceChangePct: '3.52', rsi: '63.8', revenueGrowthPct: '29.4',  pegRatio: '1.9' },
-    { symbol: 'TTD',  companyName: 'Trade Desk',      sector: 'Technology',  compositeScore: 71, momentumScore: 71, price: '220.80', priceChangePct: '2.91', rsi: '61.2', revenueGrowthPct: '27.1',  pegRatio: '2.3' },
-    { symbol: 'DDOG', companyName: 'Datadog',         sector: 'Technology',  compositeScore: 68, momentumScore: 68, price: '195.30', priceChangePct: '3.12', rsi: '60.4', revenueGrowthPct: '26.8',  pegRatio: '2.5' },
-    { symbol: 'SNOW', companyName: 'Snowflake',       sector: 'Technology',  compositeScore: 66, momentumScore: 66, price: '155.60', priceChangePct: '1.74', rsi: '58.9', revenueGrowthPct: '32.1',  pegRatio: '3.1' },
-    { symbol: 'PLTR', companyName: 'Palantir',        sector: 'Technology',  compositeScore: 63, momentumScore: 63, price: '28.40',  priceChangePct: '2.54', rsi: '57.3', revenueGrowthPct: '21.2',  pegRatio: '2.8' },
-    { symbol: 'HUBS', companyName: 'HubSpot',         sector: 'Technology',  compositeScore: 61, momentumScore: 61, price: '540.20', priceChangePct: '1.83', rsi: '55.8', revenueGrowthPct: '18.9',  pegRatio: '2.6' },
-  ];
-
-  const scanDate = new Date().toISOString().split('T')[0];
-  return base.map((c, i) => ({
-    ...c,
-    id: i + 1,
-    scanDate,
-    strategyType: type,
-    growthScore: c.compositeScore - 10,
-    valueScore: c.compositeScore - 15,
-    institutionalScore: 15,
-    optionsFlowScore: 8,
-    volumeRatio: '1.8',
-    above200sma: true,
-    above50ema: true,
-    epsGrowthPct: (parseFloat(c.revenueGrowthPct) * 1.3).toFixed(1),
-    aiThesis: null,
-    signals: {},
-    marketCap: 100 + i * 50,
-    createdAt: new Date().toISOString(),
-  }));
 }

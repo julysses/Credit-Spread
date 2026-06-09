@@ -224,6 +224,9 @@ export default function DashboardPage() {
                     warnings={rec.warnings ?? []}
                     conditions={rec.conditions ?? []}
                     noTradeEvent={rec.noTradeEvent}
+                    providerMode={rec.providerMode ?? state.strategy?.snapshot?.providerMode}
+                    tradeInstrument={rec.tradeInstrument ?? state.strategy?.snapshot?.tradeInstrument}
+                    optionChainSource={rec.optionChainSource ?? state.strategy?.snapshot?.optionChainSource}
                     onAcceptTrade={handleAcceptTrade}
                   />
                 ) : (

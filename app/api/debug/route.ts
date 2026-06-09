@@ -4,6 +4,7 @@
  */
 import { NextResponse } from 'next/server';
 import axios from 'axios';
+import { fetchYahooOptionChain } from '@/server/yahoo-options';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,7 @@ async function probe(name: string, fn: () => Promise<unknown>) {
 export async function GET() {
   const MD_KEY = process.env.MARKETDATA_API_KEY;
   const AV_KEY = process.env.ALPHA_VANTAGE_API_KEY;
+  const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
 
   const checks = await Promise.all([
     // MarketData.app — SPX
@@ -86,6 +88,35 @@ export async function GET() {
       const q = r.data?.['Global Quote'];
       return { price: q?.['05. price'], change: q?.['09. change'], changePct: q?.['10. change percent'] };
     }),
+
+    // Yahoo Finance — SPY options chain
+    probe('yahoo_spy_options', async () => {
+      const chain = await fetchYahooOptionChain('SPY', 7);
+      return {
+        count: chain.length,
+        firstExpiry: chain[0]?.expiry ?? null,
+        firstStrike: chain[0]?.strike ?? null,
+        hasBidAsk: chain.some(row => row.callBid > 0 || row.putBid > 0),
+      };
+    }),
+
+    // Finnhub — SPY quote
+    probe('finnhub_spy', async () => {
+      if (!FINNHUB_KEY) throw new Error('FINNHUB_API_KEY not set');
+      const r = await axios.get('https://finnhub.io/api/v1/quote', {
+        params: { symbol: 'SPY', token: FINNHUB_KEY }, timeout: 6000,
+      });
+      return { price: r.data?.c, change: r.data?.d, changePct: r.data?.dp, time: r.data?.t };
+    }),
+
+    // Finnhub — market news
+    probe('finnhub_news', async () => {
+      if (!FINNHUB_KEY) throw new Error('FINNHUB_API_KEY not set');
+      const r = await axios.get('https://finnhub.io/api/v1/news', {
+        params: { category: 'general', token: FINNHUB_KEY }, timeout: 6000,
+      });
+      return { count: Array.isArray(r.data) ? r.data.length : 0, firstHeadline: Array.isArray(r.data) ? r.data[0]?.headline : null };
+    }),
   ]);
 
   return NextResponse.json({
@@ -93,6 +124,7 @@ export async function GET() {
     env: {
       MARKETDATA_API_KEY: MD_KEY ? `set (${MD_KEY.slice(0, 8)}...)` : 'NOT SET',
       ALPHA_VANTAGE_API_KEY: AV_KEY ? `set (${AV_KEY.slice(0, 6)}...)` : 'NOT SET',
+      FINNHUB_API_KEY: FINNHUB_KEY ? `set (${FINNHUB_KEY.slice(0, 6)}...)` : 'NOT SET',
       GNEWS_API_KEY: process.env.GNEWS_API_KEY ? 'set' : 'NOT SET',
     },
     checks,

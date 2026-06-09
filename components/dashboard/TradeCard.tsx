@@ -54,6 +54,9 @@ interface TradeCardProps {
   warnings: string[];
   conditions: string[];
   noTradeEvent?: NoTradeEvent;
+  providerMode?: string;
+  tradeInstrument?: string | null;
+  optionChainSource?: string;
   onAcceptTrade?: () => void;
 }
 
@@ -117,9 +120,78 @@ export function TradeCard({
   warnings,
   conditions,
   noTradeEvent,
+  providerMode,
+  tradeInstrument,
+  optionChainSource,
   onAcceptTrade,
 }: TradeCardProps) {
   const [expanded, setExpanded] = useState(true);
+
+  // ── Mock-data state ──
+  if (dataConfidence === 'mock') {
+    return (
+      <Card className="overflow-hidden border-2 border-red-500/60">
+        <div className="px-6 sm:px-8 py-8 sm:py-10 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-red-500 bg-red-500/10 mb-4 sm:mb-5">
+            <WarnIcon className="w-8 h-8 sm:w-10 sm:h-10 text-red-400" />
+          </div>
+          <Badge variant="danger" className="mb-3">MOCK DATA · PAPER ONLY</Badge>
+          <h2 className="text-2xl sm:text-3xl font-bold text-red-100 tracking-tight mt-2">Live Market Data Unavailable</h2>
+          <p className="mt-2 text-gray-400 max-w-xl mx-auto leading-relaxed text-[13px]">
+            This setup is based on mock or fallback inputs. Do not place live orders until the data feed is restored and the trade is recalculated from live quotes.
+          </p>
+          <div className="mt-2 font-mono text-[11px] text-red-500/80 uppercase tracking-wider">DATA CONFIDENCE · MOCK</div>
+        </div>
+
+        {warnings.length > 0 && (
+          <div className="border-t-2 border-red-500/40 px-5 pb-4 space-y-1.5 pt-4">
+            {warnings.map((w, i) => (
+              <div key={i} className="text-[12px] text-red-300 bg-red-500/10 rounded px-3 py-2">⚠ {w}</div>
+            ))}
+          </div>
+        )}
+
+        <div className="px-6 py-3 border-t-2 border-red-500/40 bg-red-500/5 flex items-center justify-between">
+          <div className="text-[11px] text-red-500/90 font-mono uppercase tracking-wider">
+            LIVE TRADING BLOCKED · VERIFY DATA FEEDS BEFORE ENTRY
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // ── Data-invalid state ──
+  if (decisionStatus === 'data_invalid' || dataConfidence === 'invalid') {
+    return (
+      <Card className="overflow-hidden border-2 border-red-500/60">
+        <div className="px-6 sm:px-8 py-8 sm:py-10 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-red-500 bg-red-500/10 mb-4 sm:mb-5">
+            <WarnIcon className="w-8 h-8 sm:w-10 sm:h-10 text-red-400" />
+          </div>
+          <Badge variant="danger" className="mb-3">DATA INVALID · NO TRADE</Badge>
+          <h2 className="text-2xl sm:text-3xl font-bold text-red-100 tracking-tight mt-2">Trade Recommendation Blocked</h2>
+          <p className="mt-2 text-gray-400 max-w-xl mx-auto leading-relaxed text-[13px]">
+            Required market inputs failed validation. The risk model cannot support a live spread recommendation until the invalid data is corrected.
+          </p>
+          <div className="mt-2 font-mono text-[11px] text-red-500/80 uppercase tracking-wider">DATA CONFIDENCE · INVALID</div>
+        </div>
+
+        {warnings.length > 0 && (
+          <div className="border-t-2 border-red-500/40 px-5 pb-4 space-y-1.5 pt-4">
+            {warnings.map((w, i) => (
+              <div key={i} className="text-[12px] text-red-300 bg-red-500/10 rounded px-3 py-2">⚠ {w}</div>
+            ))}
+          </div>
+        )}
+
+        <div className="px-6 py-3 border-t-2 border-red-500/40 bg-red-500/5 flex items-center justify-between">
+          <div className="text-[11px] text-red-500/90 font-mono uppercase tracking-wider">
+            STANDING ASIDE · DATA QUALITY HARD BLOCK
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   // ── No-trade state ──
   if (tradeType === 'no_trade') {
@@ -188,8 +260,8 @@ export function TradeCard({
   const tradeName = strategyLabel(strategy).toUpperCase();
   const bias = tradeType.includes('put') ? 'NEUTRAL → BULLISH' : tradeType.includes('call') ? 'NEUTRAL → BEARISH' : 'NEUTRAL';
   const expLabel = daysToExpiry === 0 ? 'INTRADAY' : `${daysToExpiry} DTE · Exp ${expiryDate}`;
-  const statusLabel = decisionStatus === 'trade_approved' ? 'TRADE APPROVED' : decisionStatus === 'data_invalid' ? 'DATA INVALID' : decisionStatus === 'watch_only' ? 'WATCH ONLY' : 'NO TRADE';
-  const statusVariant = decisionStatus === 'trade_approved' ? 'success' : decisionStatus === 'data_invalid' ? 'danger' : decisionStatus === 'watch_only' ? 'warning' : 'outline';
+  const statusLabel = decisionStatus === 'trade_approved' ? 'TRADE APPROVED' : decisionStatus === 'watch_only' ? 'WATCH ONLY' : 'NO TRADE';
+  const statusVariant = decisionStatus === 'trade_approved' ? 'success' : decisionStatus === 'watch_only' ? 'warning' : 'outline';
   const dataVariant = dataConfidence === 'live' ? 'success' : dataConfidence === 'invalid' || dataConfidence === 'mock' ? 'danger' : 'warning';
 
   const legs = [
@@ -213,12 +285,22 @@ export function TradeCard({
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <Badge variant={statusVariant}>{statusLabel}</Badge>
               <Badge variant={dataVariant}>DATA · {(dataConfidence ?? 'LIVE').toUpperCase()}</Badge>
+              {providerMode && (
+                <Badge variant={providerMode === 'spy_free' ? 'warning' : providerMode === 'spx_pro' ? 'success' : 'outline'}>
+                  {providerMode === 'spy_free' ? 'SPY FREE' : providerMode === 'spx_pro' ? 'SPX PRO' : 'ANALYTICS'}
+                </Badge>
+              )}
               <Badge variant="outline" className="hidden sm:inline-flex">{expLabel}</Badge>
             </div>
             <h2 className="text-xl sm:text-3xl font-bold tracking-tight text-gray-100 leading-tight">{tradeName}</h2>
             <div className="mt-1 text-[11px] sm:text-[12px] text-gray-400 font-mono uppercase tracking-wider">
-              {bias} · {daysToExpiry} DTE HORIZON
+              {bias} · {daysToExpiry} DTE HORIZON{tradeInstrument ? ` · ${tradeInstrument}` : ''}
             </div>
+            {optionChainSource && (
+              <div className="mt-1 text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+                OPTIONS SOURCE · {optionChainSource}
+              </div>
+            )}
           </div>
 
           {/* Confidence dial */}
@@ -232,6 +314,12 @@ export function TradeCard({
           </div>
         </div>
       </div>
+
+      {providerMode === 'spy_free' && (
+        <div className="mx-4 sm:mx-6 mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-[12px] text-yellow-200 leading-relaxed">
+          <strong>SPY Free Live Mode.</strong> Signal context remains SPX/VIX, but the trade instrument is SPY using Yahoo option-chain data. SPY options are not Section 1256, are American-style, physically settled, and carry assignment risk. Close before expiration.
+        </div>
+      )}
 
       {/* Primary metrics row */}
       <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 border-t border-sd-line divide-x divide-sd-line">

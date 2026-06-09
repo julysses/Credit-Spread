@@ -17,6 +17,7 @@ import {
 } from '@/lib/models/stock-feature-engine';
 import { classifyIntradayRegime, type IntradayRegimeResult } from '@/lib/models/intraday-regime-engine';
 import { YAHOO_ONLY_SYMBOLS, YAHOO_SYMBOL_MAP } from '@/lib/constants/stock-universe';
+import { fetchMarketSnapshot } from '@/server/market-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -126,6 +127,9 @@ export interface ScanCandidate {
   type: 'etf' | 'stock';
   currentPrice: number;
   dayChangePct: number;
+  priceSource: string;
+  priceStatus: 'live' | 'delayed';
+  priceAsOf: number;
   features: SymbolFeatures;
   bestStrategy: {
     strategyId: string;
@@ -160,8 +164,12 @@ export async function GET(request: Request) {
       ? await fetchAlpacaSnapshots(snapshotSymbols).catch(() => new Map())
       : new Map();
 
-    // Always fetch SPY first for RS computation and regime
-    const spyBars = await fetchIntradayBars('SPY').catch(() => null);
+    // Always fetch SPY first for RS computation and regime. Fetch market snapshot for live VIX.
+    const [spyBars, marketSnapshot] = await Promise.all([
+      fetchIntradayBars('SPY').catch(() => null),
+      fetchMarketSnapshot().catch(() => null),
+    ]);
+    const vixLevel = marketSnapshot?.vix?.price && marketSnapshot.vix.price > 0 ? marketSnapshot.vix.price : null;
 
     // Fetch batch intraday bars in parallel
     const batchResults = await Promise.allSettled(
@@ -182,7 +190,7 @@ export async function GET(request: Request) {
       spyOrbLow:       spyFeatures?.openLow ?? 0,
       spyAtr:          spyFeatures?.atr ?? 0,
       spyRvol:         spyFeatures?.rvol ?? 1,
-      vixLevel:        20, // fallback — dedicated route fetches VIX
+      vixLevel:        vixLevel ?? 0,
       spyEma9:         spyFeatures?.ema9 ?? 0,
       spyEma20:        spyFeatures?.ema20 ?? 0,
       minutesSinceOpen: minsOpen,
@@ -211,11 +219,15 @@ export async function GET(request: Request) {
 
       const tradePlan = generateTradePlan(features, best);
 
+      const priceSource = !YAHOO_ONLY_SYMBOLS.has(sym) && alpacaConfigured() ? 'Alpaca/Yahoo bars' : 'Yahoo Finance bars';
       candidates.push({
         symbol: sym,
         type: ETF_UNIVERSE.includes(sym) ? 'etf' : 'stock',
         currentPrice: features.currentPrice,
         dayChangePct: features.dayChangePct,
+        priceSource,
+        priceStatus: priceSource.startsWith('Alpaca') ? 'live' : 'delayed',
+        priceAsOf: bars[bars.length - 1]?.timestamp ? bars[bars.length - 1].timestamp * 1000 : Date.now(),
         features,
         bestStrategy: {
           strategyId:   best.strategyId,
@@ -244,6 +256,16 @@ export async function GET(request: Request) {
         scannedCount: batch.length,
         marketOpen,
         fetchedAt: Date.now(),
+        sources: {
+          vix: marketSnapshot?.vix?.price ? {
+            status: /yahoo|finnhub/i.test(marketSnapshot.sources?.vix ?? '') ? 'delayed' : 'live',
+            provider: marketSnapshot.sources?.vix ?? 'market_snapshot',
+            fetchedAt: marketSnapshot.fetchedAt,
+          } : {
+            status: 'unavailable',
+            provider: 'none',
+          },
+        },
       },
     });
   } catch (err) {

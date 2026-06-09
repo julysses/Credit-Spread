@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/database/db';
+import { trades } from '@/database/schema';
+import { desc, eq } from 'drizzle-orm';
 import {
   classifyDefenseRegime,
   calcSpreadPnL,
@@ -9,41 +12,66 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-// Default demo position used when no real position data is available
-const DEMO_POSITION: SpreadPosition = {
-  entryCredit: 1.75,
-  shortStrike: 5650,
-  longStrike: 5640,
-  optionType: 'put',
-  dteAtEntry: 7,
-  contracts: 2,
-};
-
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
+    const activeTrades = await db
+      .select()
+      .from(trades)
+      .where(eq(trades.status, 'open'))
+      .orderBy(desc(trades.openedAt))
+      .limit(1)
+      .execute();
 
-    // Accept query params to override demo position
-    const entryCredit  = parseFloat(url.searchParams.get('entryCredit')  ?? '');
-    const shortStrike  = parseFloat(url.searchParams.get('shortStrike')  ?? '');
-    const longStrike   = parseFloat(url.searchParams.get('longStrike')   ?? '');
-    const optionType   = (url.searchParams.get('optionType')  ?? 'put') as 'put' | 'call';
-    const dteAtEntry   = parseFloat(url.searchParams.get('dteAtEntry')   ?? '');
-    const contracts    = parseInt(url.searchParams.get('contracts')      ?? '');
-    const currentSpx   = parseFloat(url.searchParams.get('spx')          ?? '5800');
-    const currentVix   = parseFloat(url.searchParams.get('vix')          ?? '18');
-    const currentDte   = parseFloat(url.searchParams.get('dte')          ?? '3');
-    const currentIv    = parseFloat(url.searchParams.get('iv')           ?? '0.18');
-    const accountSize  = parseFloat(url.searchParams.get('accountSize')  ?? '100000');
-    const riskPct      = parseFloat(url.searchParams.get('riskPct')      ?? '0.02');
+    const activeTrade = activeTrades[0];
+    if (!activeTrade) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          hasActivePosition: false,
+          position: null,
+          message: 'No active position',
+          lastUpdated: formatEtTime(),
+        },
+      });
+    }
+
+    const currentSpx = parseFloat(url.searchParams.get('spx') ?? '');
+    const currentVix = parseFloat(url.searchParams.get('vix') ?? '');
+    const currentDte = parseFloat(url.searchParams.get('dte') ?? '');
+    const currentIv  = parseFloat(url.searchParams.get('iv')  ?? '');
+    const accountSize = parseFloat(url.searchParams.get('accountSize') ?? '100000');
+    const riskPct = parseFloat(url.searchParams.get('riskPct') ?? '0.02');
+
+    const missingMarketInputs = [];
+    if (!Number.isFinite(currentSpx)) missingMarketInputs.push('spx');
+    if (!Number.isFinite(currentVix)) missingMarketInputs.push('vix');
+    if (!Number.isFinite(currentDte)) missingMarketInputs.push('dte');
+    if (!Number.isFinite(currentIv)) missingMarketInputs.push('iv');
+
+    if (missingMarketInputs.length > 0) {
+      return NextResponse.json({
+        success: false,
+        code: 'DATA_UNAVAILABLE',
+        feature: 'defense-status',
+        message: `Defense status requires live market inputs: ${missingMarketInputs.join(', ')}`,
+        missingSources: missingMarketInputs,
+        data: {
+          hasActivePosition: true,
+          position: activeTrade,
+        },
+      }, { status: 503 });
+    }
 
     const position: SpreadPosition = {
-      entryCredit:  isNaN(entryCredit) ? DEMO_POSITION.entryCredit  : entryCredit,
-      shortStrike:  isNaN(shortStrike) ? DEMO_POSITION.shortStrike  : shortStrike,
-      longStrike:   isNaN(longStrike)  ? DEMO_POSITION.longStrike   : longStrike,
-      optionType,
-      dteAtEntry:   isNaN(dteAtEntry)  ? DEMO_POSITION.dteAtEntry   : dteAtEntry,
-      contracts:    isNaN(contracts)   ? DEMO_POSITION.contracts     : contracts,
+      entryCredit: activeTrade.openCredit,
+      shortStrike: activeTrade.shortStrike,
+      longStrike: activeTrade.longStrike,
+      optionType: (activeTrade.optionType === 'call' ? 'call' : 'put'),
+      dteAtEntry: activeTrade.expiryDate
+        ? Math.max(0, Math.round((new Date(activeTrade.expiryDate).getTime() - new Date(activeTrade.openedAt ?? Date.now()).getTime()) / 86400000))
+        : Math.max(0, currentDte),
+      contracts: activeTrade.contracts ?? 1,
     };
 
     const pnl = calcSpreadPnL(position, currentSpx, currentIv, currentDte);
@@ -54,8 +82,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        hasActivePosition: true,
         regime,
         position,
+        trade: activeTrade,
         pnl,
         plays,
         sizing,
@@ -65,16 +95,21 @@ export async function GET(req: NextRequest) {
           dte: currentDte,
           iv: currentIv,
         },
-        lastUpdated: new Date().toLocaleTimeString('en-US', {
-          timeZone: 'America/New_York',
-          hour: '2-digit', minute: '2-digit', second: '2-digit',
-        }) + ' ET',
+        lastUpdated: formatEtTime(),
       },
     });
   } catch (err) {
+    console.error('Defense status error:', err);
     return NextResponse.json(
-      { success: false, error: String(err) },
-      { status: 500 },
+      { success: false, code: 'DATA_UNAVAILABLE', error: String(err) },
+      { status: 503 },
     );
   }
+}
+
+function formatEtTime(): string {
+  return new Date().toLocaleTimeString('en-US', {
+    timeZone: 'America/New_York',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }) + ' ET';
 }

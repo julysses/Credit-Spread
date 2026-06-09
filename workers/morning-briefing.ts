@@ -4,8 +4,9 @@
  * Generates and stores daily market brief
  */
 
-import { fetchMarketSnapshot, getMockMarketData } from '../server/market-data';
-import { analyzeNews, getMockNewsAnalysis } from '../server/news-analyzer';
+import { fetchMarketSnapshot } from '../server/market-data';
+import { analyzeNews } from '../server/news-analyzer';
+import { marketSnapshotMissingSources } from '../server/live-data';
 import { generateMorningBrief } from '../server/ai-briefing';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '../lib/models/strategy-engine';
 import { classifyVIXRegime } from '../lib/models/volatility';
@@ -21,16 +22,26 @@ async function runMorningBriefing() {
   try {
     // Fetch market data
     console.log('Fetching market data...');
-    const snapshot = process.env.MARKETDATA_API_KEY
-      ? await fetchMarketSnapshot()
-      : getMockMarketData();
+    const snapshot = await fetchMarketSnapshot();
+    const missingSources = marketSnapshotMissingSources(snapshot);
+    if (missingSources.includes('spx') || missingSources.includes('vix') || missingSources.includes('optionChain')) {
+      throw new Error(`Morning briefing blocked — unavailable live sources: ${missingSources.join(', ')}`);
+    }
     console.log(`SPX: ${snapshot.spx.price.toFixed(2)}, VIX: ${snapshot.vix.price.toFixed(2)}`);
 
     // Analyze news
     console.log('Analyzing news...');
-    const newsAnalysis = process.env.GNEWS_API_KEY
+    const newsAnalysis = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY
       ? await analyzeNews()
-      : getMockNewsAnalysis();
+      : {
+          items: [],
+          overallSentiment: 'neutral' as const,
+          overallScore: 0,
+          geopoliticalRiskLevel: 'low' as const,
+          macroRiskLevel: 'low' as const,
+          keyRisks: ['News source unavailable'],
+          tradeabilityScore: 50,
+        };
     console.log(`News sentiment: ${newsAnalysis.overallSentiment}, Tradeability: ${newsAnalysis.tradeabilityScore}`);
 
     // Build market conditions

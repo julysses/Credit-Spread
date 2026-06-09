@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
-import { analyzeNews, getMockNewsAnalysis } from '@/server/news-analyzer';
+import { fetchMarketSnapshot } from '@/server/market-data';
+import { analyzeNews } from '@/server/news-analyzer';
+import { marketSnapshotMissingSources } from '@/server/live-data';
 import {
   evaluateAllStrategies,
   assessRiskLevel,
@@ -19,12 +20,21 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const snapshot = await fetchMarketSnapshot();
+    const missingSources = marketSnapshotMissingSources(snapshot).filter(source => source !== 'optionChain' || snapshot.providerMode === 'analytics_only');
     const hasNewsSource = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
-    const newsAnalysis = hasNewsSource ? await analyzeNews() : getMockNewsAnalysis();
+    const newsAnalysis = hasNewsSource ? await analyzeNews() : {
+      items: [],
+      overallSentiment: 'neutral' as const,
+      overallScore: 0,
+      geopoliticalRiskLevel: 'low' as const,
+      macroRiskLevel: 'low' as const,
+      keyRisks: ['News source unavailable'],
+      tradeabilityScore: 50,
+    };
 
     const { spx, vix } = snapshot;
-    const impliedVol = vix.price / 100;
-    const realizedVol = impliedVol * 0.85;
+    const impliedVol = vix.price > 0 ? vix.price / 100 : 0;
+    const realizedVol = snapshot.realizedVol ?? 0;
     const dailyChangePct = spx.changePct || 0;
 
     const riskFreeRate = 0.05;
@@ -77,9 +87,16 @@ export async function GET() {
       realizedVol,
       impliedVol,
       skew,
+      dataConfidence: missingSources.length > 0 || !snapshot.tradeable ? 'unavailable' : 'live',
+      dataWarnings: missingSources.map(source => `${source.toUpperCase()} unavailable — live strategy pricing blocked`),
+      providerMode: snapshot.providerMode,
+      tradeInstrument: snapshot.tradeInstrument,
+      tradePrice: snapshot.tradeInstrument === 'SPY' ? snapshot.spy.price : snapshot.spx.price,
+      optionChainSource: snapshot.optionChainSource,
+      optionChain: snapshot.optionChain,
     };
 
-    const recommended = selectStrategy(conditions);
+    const recommended = missingSources.length > 0 || !snapshot.tradeable ? 'NO_TRADE' : selectStrategy(conditions);
     const allStrategies = evaluateAllStrategies(conditions);
 
     // Current time window checks for each strategy
@@ -99,8 +116,9 @@ export async function GET() {
       exitRules: metadata.exitRules,
       bestFor: metadata.bestFor,
       avoid: metadata.avoid,
-      isRecommended,
-      isViable,
+      isRecommended: missingSources.length === 0 && snapshot.tradeable && isRecommended,
+      isViable: missingSources.length === 0 && snapshot.tradeable && isViable,
+      tradeable: missingSources.length === 0 && snapshot.tradeable,
       inEntryWindow: inWindow(metadata.entryHHMM),
       recommendation: {
         tradeType: recommendation.tradeType,
@@ -142,6 +160,9 @@ export async function GET() {
           realizedVol,
           timeOfDay,
           isMarketOpen: snapshot.isMarketOpen,
+          tradeable: missingSources.length === 0,
+          missingSources,
+          sources: snapshot.sources,
         },
         strategies: strategyCards,
       },

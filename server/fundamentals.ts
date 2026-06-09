@@ -99,7 +99,7 @@ function safeNum(v: unknown, fallback = 0): number {
 // ─── Main Fundamentals Fetcher ────────────────────────────────────────────────
 
 export async function fetchFundamentals(symbol: string): Promise<FundamentalsData> {
-  if (!fmpConfigured()) return getMockFundamentals(symbol);
+  if (!fmpConfigured()) return getUnavailableFundamentals(symbol);
 
   try {
     const [profile, incomeArr, metricsArr, estimatesArr, earningsArr] = await Promise.all([
@@ -194,7 +194,7 @@ export async function fetchFundamentals(symbol: string): Promise<FundamentalsDat
 // ─── Alpha Vantage Fallback ───────────────────────────────────────────────────
 
 async function fetchFundamentalsAV(symbol: string): Promise<FundamentalsData> {
-  if (!avConfigured()) return getMockFundamentals(symbol);
+  if (!avConfigured()) return getUnavailableFundamentals(symbol);
   try {
     const resp = await axios.get(AV_BASE, {
       params: {
@@ -242,14 +242,14 @@ async function fetchFundamentalsAV(symbol: string): Promise<FundamentalsData> {
       daysToEarnings:       null,
     };
   } catch {
-    return getMockFundamentals(symbol);
+    return getUnavailableFundamentals(symbol);
   }
 }
 
 // ─── Insider Activity ─────────────────────────────────────────────────────────
 
 export async function fetchInsiderActivity(symbol: string): Promise<InsiderData> {
-  if (!fmpConfigured()) return getMockInsiderData(symbol);
+  if (!fmpConfigured()) return getUnavailableInsiderData(symbol);
 
   try {
     const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -284,14 +284,14 @@ export async function fetchInsiderActivity(symbol: string): Promise<InsiderData>
 
     return { symbol, netBuyDollars90d: netBuy, mostRecentBuyDate, mostRecentBuyShares, insiderBuyCount90d: buys, insiderSellCount90d: sells };
   } catch {
-    return getMockInsiderData(symbol);
+    return getUnavailableInsiderData(symbol);
   }
 }
 
 // ─── Analyst Estimates ────────────────────────────────────────────────────────
 
 export async function fetchAnalystEstimates(symbol: string): Promise<AnalystEstimatesData> {
-  if (!fmpConfigured()) return getMockAnalystEstimates(symbol);
+  if (!fmpConfigured()) return getUnavailableAnalystEstimates(symbol);
 
   try {
     const data = await fmpGet<Record<string, unknown>[]>(`analyst-stock-recommendations/${symbol}`, { limit: '1' });
@@ -323,14 +323,14 @@ export async function fetchAnalystEstimates(symbol: string): Promise<AnalystEsti
       epsEstimateNextQ:      0,
     };
   } catch {
-    return getMockAnalystEstimates(symbol);
+    return getUnavailableAnalystEstimates(symbol);
   }
 }
 
 // ─── Short Float ──────────────────────────────────────────────────────────────
 
 export async function fetchShortInterest(symbol: string): Promise<{ shortFloatPct: number; daysToCover: number }> {
-  if (!fmpConfigured()) return { shortFloatPct: Math.random() * 8 + 2, daysToCover: 2 };
+  if (!fmpConfigured()) return { shortFloatPct: 0, daysToCover: 0 };
 
   try {
     const data = await fmpGet<Record<string, unknown>[]>(`historical/employee_count/${symbol}`, { limit: '1' });
@@ -342,7 +342,7 @@ export async function fetchShortInterest(symbol: string): Promise<{ shortFloatPc
   }
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── Unavailable Data ────────────────────────────────────────────────────────────────
 
 const MOCK_SECTORS: Record<string, string> = {
   NVDA: 'Technology', MSFT: 'Technology', AAPL: 'Technology', META: 'Communication Services',
@@ -351,77 +351,24 @@ const MOCK_SECTORS: Record<string, string> = {
   CRWD: 'Technology', DDOG: 'Technology', SNOW: 'Technology', TTD: 'Technology',
 };
 
-export function getMockFundamentals(symbol: string): FundamentalsData {
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const rng  = (min: number, max: number) => min + ((seed * 1103515245 + 12345) & 0x7fffffff) % (max - min);
-
-  const revGrowth = rng(8, 45);
-  const epsGrowth = rng(10, 60);
-  const margin    = rng(15, 40);
-
+export function getUnavailableFundamentals(symbol: string): FundamentalsData {
   return {
-    symbol,
-    companyName:          `${symbol} Corp`,
-    sector:               MOCK_SECTORS[symbol] ?? 'Technology',
-    industry:             'Software',
-    marketCap:            rng(10, 500),
-    revenueGrowthYoy:     revGrowth,
-    revenueGrowthQoq:     Math.round(revGrowth / 4 * 10) / 10,
-    epsGrowthYoy:         epsGrowth,
-    epsGrowthQoq:         Math.round(epsGrowth / 4 * 10) / 10,
-    grossMargin:          rng(55, 82),
-    operatingMargin:      margin,
-    netMargin:            Math.round(margin * 0.75),
-    fcfMargin:            Math.round(margin * 0.85),
-    roe:                  rng(15, 45),
-    roa:                  rng(8, 22),
-    debtToEbitda:         Math.round(rng(0, 30) / 10),
-    currentRatio:         1.5 + rng(0, 20) / 10,
-    netCash:              rng(100, 5000),
-    peRatio:              rng(20, 55),
-    forwardPe:            rng(15, 40),
-    psRatio:              rng(5, 18),
-    pbRatio:              rng(3, 15),
-    evEbitda:             rng(20, 60),
-    pegRatio:             0.8 + rng(0, 12) / 10,
-    earningsSurprisePct:  rng(2, 15),
-    earningsSurpriteRate4q: rng(5, 12),
-    analystTargetPrice:   rng(150, 800),
-    impliedUpside:        rng(10, 35),
-    epsRevisionUp30d:     rng(2, 8),
-    epsRevisionDown30d:   rng(0, 3),
-    nextEarningsDate:     new Date(Date.now() + rng(14, 75) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    daysToEarnings:       rng(14, 75),
+    symbol, companyName: symbol, sector: 'Unavailable', industry: 'Unavailable', marketCap: 0,
+    revenueGrowthYoy: 0, revenueGrowthQoq: 0, epsGrowthYoy: 0, epsGrowthQoq: 0,
+    grossMargin: 0, operatingMargin: 0, netMargin: 0, fcfMargin: 0,
+    roe: 0, roa: 0, debtToEbitda: 0, currentRatio: 0, netCash: 0,
+    peRatio: 0, forwardPe: 0, psRatio: 0, pbRatio: 0, evEbitda: 0, pegRatio: 0,
+    earningsSurprisePct: 0, earningsSurpriteRate4q: 0, analystTargetPrice: 0, impliedUpside: 0,
+    epsRevisionUp30d: 0, epsRevisionDown30d: 0, nextEarningsDate: null, daysToEarnings: null,
   };
 }
 
-function getMockInsiderData(symbol: string): InsiderData {
-  const seed = symbol.charCodeAt(0);
-  return {
-    symbol,
-    netBuyDollars90d:     (seed % 3 === 0 ? -1 : 1) * seed * 12500,
-    mostRecentBuyDate:    seed % 4 !== 0
-      ? new Date(Date.now() - seed * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      : null,
-    mostRecentBuyShares:  seed * 200,
-    insiderBuyCount90d:   seed % 5,
-    insiderSellCount90d:  seed % 3,
-  };
+function getUnavailableInsiderData(symbol: string): InsiderData {
+  return { symbol, netBuyDollars90d: 0, mostRecentBuyDate: null, mostRecentBuyShares: 0, insiderBuyCount90d: 0, insiderSellCount90d: 0 };
 }
 
-function getMockAnalystEstimates(symbol: string): AnalystEstimatesData {
-  const seed = symbol.charCodeAt(0) % 4;
-  const ratings: AnalystEstimatesData['consensusRating'][] = ['strong_buy','buy','buy','hold'];
-  return {
-    symbol,
-    consensusRating:       ratings[seed],
-    targetPriceMean:       200 + seed * 50,
-    targetPriceHigh:       300 + seed * 60,
-    targetPriceLow:        100 + seed * 30,
-    numberOfAnalysts:      15 + seed * 3,
-    revenueEstimateNextQ:  1e9 * (1 + seed * 0.1),
-    epsEstimateNextQ:      2.5 + seed * 0.5,
-  };
+function getUnavailableAnalystEstimates(symbol: string): AnalystEstimatesData {
+  return { symbol, consensusRating: 'hold', targetPriceMean: 0, targetPriceHigh: 0, targetPriceLow: 0, numberOfAnalysts: 0, revenueEstimateNextQ: 0, epsEstimateNextQ: 0 };
 }
 
 // ─── FMP Stable API Base ──────────────────────────────────────────────────────
@@ -596,7 +543,7 @@ export interface ESGData {
 // ─── Bulk Fetchers (1 API call covers ALL tickers) ────────────────────────────
 
 export async function fetchBulkKeyMetrics(): Promise<Map<string, KeyMetricsTTM>> {
-  if (!fmpConfigured()) return getMockBulkKeyMetrics();
+  if (!fmpConfigured()) return getUnavailableBulkKeyMetrics();
   try {
     const data = await fmpStable<KeyMetricsTTM[]>('key-metrics-ttm-bulk');
     const map = new Map<string, KeyMetricsTTM>();
@@ -604,7 +551,7 @@ export async function fetchBulkKeyMetrics(): Promise<Map<string, KeyMetricsTTM>>
     return map;
   } catch (err) {
     console.error('[fundamentals] fetchBulkKeyMetrics failed:', (err as Error).message);
-    return getMockBulkKeyMetrics();
+    return getUnavailableBulkKeyMetrics();
   }
 }
 
@@ -622,7 +569,7 @@ export async function fetchBulkRatios(): Promise<Map<string, RatiosTTM>> {
 }
 
 export async function fetchBulkScores(): Promise<Map<string, FinancialScores>> {
-  if (!fmpConfigured()) return getMockBulkScores();
+  if (!fmpConfigured()) return getUnavailableBulkScores();
   try {
     const data = await fmpStable<FinancialScores[]>('scores-bulk');
     const map = new Map<string, FinancialScores>();
@@ -630,7 +577,7 @@ export async function fetchBulkScores(): Promise<Map<string, FinancialScores>> {
     return map;
   } catch (err) {
     console.error('[fundamentals] fetchBulkScores failed:', (err as Error).message);
-    return getMockBulkScores();
+    return getUnavailableBulkScores();
   }
 }
 
@@ -709,7 +656,7 @@ export async function fetchBulkProfiles(): Promise<Map<string, CompanyProfile>> 
 // ─── Per-Symbol Deep-Dive (top candidates only) ───────────────────────────────
 
 export async function fetchDCFValuation(symbol: string): Promise<DCFData | null> {
-  if (!fmpConfigured()) return getMockDCF(symbol);
+  if (!fmpConfigured()) return getUnavailableDCF(symbol);
   try {
     const data = await fmpStable<Record<string, unknown>[]>('discounted-cash-flow', { symbol });
     const d = Array.isArray(data) ? data[0] : (data as Record<string, unknown>);
@@ -724,7 +671,7 @@ export async function fetchDCFValuation(symbol: string): Promise<DCFData | null>
       impliedUpside: price > 0 ? parseFloat(((dcf - price) / price * 100).toFixed(1)) : 0,
     };
   } catch {
-    return getMockDCF(symbol);
+    return getUnavailableDCF(symbol);
   }
 }
 
@@ -829,7 +776,7 @@ export async function fetchCongressionalTrades(symbol: string): Promise<Congress
 }
 
 export async function fetchInsiderStatistics(symbol: string): Promise<InsiderStats> {
-  if (!fmpConfigured()) return getMockInsiderStats(symbol);
+  if (!fmpConfigured()) return getUnavailableInsiderStats(symbol);
   try {
     const data = await fmpStable<Record<string, unknown>[]>('insider-trading/statistics', { symbol });
     const d = Array.isArray(data) ? data[0] as Record<string, unknown> : {};
@@ -845,7 +792,7 @@ export async function fetchInsiderStatistics(symbol: string): Promise<InsiderSta
       mostRecentTransaction:  String(d.mostRecentTransaction ?? ''),
     };
   } catch {
-    return getMockInsiderStats(symbol);
+    return getUnavailableInsiderStats(symbol);
   }
 }
 
@@ -943,36 +890,18 @@ export async function fetchRevenueSegments(symbol: string): Promise<{ product: R
 
 // ─── Bulk Mock Data ───────────────────────────────────────────────────────────
 
-function getMockBulkKeyMetrics(): Map<string, KeyMetricsTTM> {
-  return new Map(); // empty — growth screener uses getMockFundamentals for individual stocks
+function getUnavailableBulkKeyMetrics(): Map<string, KeyMetricsTTM> {
+  return new Map(); // empty — growth screener uses getUnavailableFundamentals for individual stocks
 }
 
-function getMockBulkScores(): Map<string, FinancialScores> {
+function getUnavailableBulkScores(): Map<string, FinancialScores> {
   return new Map();
 }
 
-function getMockDCF(symbol: string): DCFData {
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const price = 100 + (seed % 400);
-  const dcf   = price * (1 + (seed % 30) / 100);
-  return {
-    symbol,
-    date:          new Date().toISOString().split('T')[0],
-    dcf,
-    stockPrice:    price,
-    impliedUpside: parseFloat(((dcf - price) / price * 100).toFixed(1)),
-  };
+function getUnavailableDCF(symbol: string): DCFData {
+  return { symbol, date: new Date().toISOString().split('T')[0], dcf: 0, stockPrice: 0, impliedUpside: 0 };
 }
 
-function getMockInsiderStats(symbol: string): InsiderStats {
-  const seed = symbol.charCodeAt(0);
-  return {
-    symbol,
-    totalBought:            seed * 15000,
-    totalSold:              seed * 8000,
-    netActivity:            seed * 7000,
-    buyerCount:             seed % 5 + 1,
-    sellerCount:            seed % 3,
-    mostRecentTransaction:  new Date(Date.now() - seed * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  };
+function getUnavailableInsiderStats(symbol: string): InsiderStats {
+  return { symbol, totalBought: 0, totalSold: 0, netActivity: 0, buyerCount: 0, sellerCount: 0, mostRecentTransaction: '' };
 }

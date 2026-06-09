@@ -14,16 +14,9 @@ interface ScanRow {
   setup: string;
   iv: number;
   tone: 'bull' | 'bear' | 'neu';
+  source: string;
+  status: string;
 }
-
-const MOCK_ROWS: ScanRow[] = [
-  { sym: 'NVDA', px: 872.14, chg: 2.84,  vol: '14.2M', rvol: 1.82, setup: 'Breakout +2σ',      iv: 54, tone: 'bull' },
-  { sym: 'META', px: 598.47, chg: 1.12,  vol: '8.1M',  rvol: 1.31, setup: 'Flag continuation', iv: 38, tone: 'bull' },
-  { sym: 'TSLA', px: 342.88, chg: -3.21, vol: '52.7M', rvol: 2.14, setup: 'Gap down · key lvl', iv: 71, tone: 'bear' },
-  { sym: 'AAPL', px: 227.92, chg: 0.41,  vol: '22.3M', rvol: 0.78, setup: 'Range · compression',iv: 26, tone: 'neu' },
-  { sym: 'AMZN', px: 198.44, chg: 1.87,  vol: '18.6M', rvol: 1.22, setup: 'Mean reversion',     iv: 32, tone: 'bull' },
-  { sym: 'AMD',  px: 148.22, chg: -1.92, vol: '28.4M', rvol: 1.54, setup: 'Support test',       iv: 58, tone: 'bear' },
-];
 
 // Deterministic sparkline from symbol seed
 function sparkData(sym: string): number[] {
@@ -51,27 +44,33 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 }
 
 export function StocksScannerPanel() {
-  const [rows, setRows] = useState<ScanRow[]>(MOCK_ROWS);
+  const [rows, setRows] = useState<ScanRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/stocks/scan')
       .then(r => r.json())
       .then((res: any) => {
         if (res?.data?.candidates?.length) {
-          const mapped: ScanRow[] = res.data.candidates.slice(0, 6).map((c: any) => ({
-            sym:   c.symbol ?? c.sym,
-            px:    c.price ?? c.px ?? 0,
-            chg:   c.changePercent ?? c.chg ?? 0,
-            vol:   c.volume ?? c.vol ?? '—',
-            rvol:  c.relativeVolume ?? c.rvol ?? 1,
-            setup: c.setup ?? '—',
-            iv:    c.ivPercentile ?? c.iv ?? 0,
-            tone:  (c.bias ?? 'neu') as ScanRow['tone'],
-          }));
+          const mapped: ScanRow[] = res.data.candidates.slice(0, 6).map((c: any) => {
+            const direction = c.bestStrategy?.direction;
+            return {
+              sym:    c.symbol ?? c.sym,
+              px:     c.currentPrice ?? c.price ?? c.px ?? 0,
+              chg:    c.dayChangePct ?? c.changePercent ?? c.chg ?? 0,
+              vol:    c.features?.volume?.toLocaleString?.() ?? c.volume ?? c.vol ?? '—',
+              rvol:   c.features?.rvol ?? c.relativeVolume ?? c.rvol ?? 1,
+              setup:  c.bestStrategy?.strategyName ?? c.setup ?? '—',
+              iv:     c.ivPercentile ?? c.iv ?? '—',
+              tone:   (direction === 'long' || direction === 'bullish' ? 'bull' : direction === 'short' || direction === 'bearish' ? 'bear' : c.bias ?? 'neu') as ScanRow['tone'],
+              source: c.priceSource ?? c.dataSource ?? 'Alpaca/Yahoo',
+              status: c.priceStatus ?? c.dataStatus ?? 'live',
+            };
+          });
           setRows(mapped);
         }
       })
-      .catch(() => {}); // silently fall back to mock data
+      .catch(() => setError('Stocks scan unavailable'));
   }, []);
 
   return (
@@ -79,7 +78,7 @@ export function StocksScannerPanel() {
       <CardHeader>
         <CardTitle>Stocks Scanner · Top Setups</CardTitle>
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">LIVE</span>
+          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">{error ? 'UNAVAILABLE' : 'LIVE API'}</span>
         </div>
       </CardHeader>
 
@@ -97,13 +96,19 @@ export function StocksScannerPanel() {
             </tr>
           </thead>
           <tbody className="divide-y divide-sd-line/70">
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="px-5 py-6 text-center text-gray-500">{error ?? 'No live stock scan rows available.'}</td></tr>
+            )}
             {rows.map((r, i) => {
               const sparkColor =
                 r.tone === 'bull' ? '#22c55e' :
                 r.tone === 'bear' ? '#ef4444' : '#64748b';
               return (
                 <tr key={i} className="hover:bg-sd-muted/40 transition-colors">
-                  <td className="px-5 py-2.5 font-semibold text-gray-100 font-mono">{r.sym}</td>
+                  <td className="px-5 py-2.5 font-semibold text-gray-100 font-mono">
+                    <div>{r.sym}</div>
+                    <div className="text-[8px] text-gray-600 uppercase tracking-wider">{r.status} · {r.source}</div>
+                  </td>
                   <td className="px-3 py-2.5 text-right font-mono text-gray-200 tabular-nums">
                     {typeof r.px === 'number' ? r.px.toFixed(2) : r.px}
                   </td>

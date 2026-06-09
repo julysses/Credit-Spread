@@ -3,7 +3,8 @@
  * Scans for trade setups every 5 minutes during market hours
  */
 
-import { fetchMarketSnapshot, getMockMarketData } from '../server/market-data';
+import { fetchMarketSnapshot } from '../server/market-data';
+import { marketSnapshotMissingSources } from '../server/live-data';
 import { runStrategyEngine, selectStrategy, MarketConditions } from '../lib/models/strategy-engine';
 import { classifyVIXRegime } from '../lib/models/volatility';
 import { dispatchAlert, formatTradeAlert } from './alert-system';
@@ -67,9 +68,12 @@ async function scanMarket() {
 
   console.log(`[${new Date().toISOString()}] Scanning market...`);
 
-  const snapshot = process.env.MARKETDATA_API_KEY
-    ? await fetchMarketSnapshot()
-    : getMockMarketData();
+  const snapshot = await fetchMarketSnapshot();
+  const missingSources = marketSnapshotMissingSources(snapshot);
+  if (missingSources.includes('spx') || missingSources.includes('vix') || missingSources.includes('optionChain')) {
+    console.warn(`Live market scan skipped — unavailable sources: ${missingSources.join(', ')}`);
+    return;
+  }
 
   const { spx, vix } = snapshot;
   const impliedVol = vix.price / 100;

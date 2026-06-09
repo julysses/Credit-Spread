@@ -2,7 +2,7 @@
  * Options Flow Scanner
  * Detects unusual options activity across individual stocks.
  * Primary: MarketData.app options chain endpoint
- * Fallback: mock data when MARKETDATA_API_KEY is not configured
+ * Returns unavailable/neutral data when MARKETDATA_API_KEY is not configured.
  */
 
 import axios from 'axios';
@@ -176,11 +176,11 @@ function computeFlowScore(alerts: OptionsFlowAlert[], putCallVol: number): numbe
 // ─── Main Flow Analyzer ───────────────────────────────────────────────────────
 
 export async function analyzeOptionsFlow(symbol: string): Promise<StockFlowSummary> {
-  if (!process.env.MARKETDATA_API_KEY) return getMockFlowSummary(symbol);
+  if (!process.env.MARKETDATA_API_KEY) return getUnavailableFlowSummary(symbol);
 
   try {
     const chain = await fetchOptionsChain(symbol);
-    if (chain.length === 0) return getMockFlowSummary(symbol);
+    if (chain.length === 0) return getUnavailableFlowSummary(symbol);
 
     const calls = chain.filter(q => q.side === 'call');
     const puts  = chain.filter(q => q.side === 'put');
@@ -223,7 +223,7 @@ export async function analyzeOptionsFlow(symbol: string): Promise<StockFlowSumma
     };
   } catch (err) {
     console.error(`[options-flow] Failed for ${symbol}:`, (err as Error).message);
-    return getMockFlowSummary(symbol);
+    return getUnavailableFlowSummary(symbol);
   }
 }
 
@@ -246,7 +246,7 @@ export async function scanOptionsFlowBatch(
       if (r.status === 'fulfilled') {
         results.set(chunk[i], r.value);
       } else {
-        results.set(chunk[i], getMockFlowSummary(chunk[i]));
+        results.set(chunk[i], getUnavailableFlowSummary(chunk[i]));
       }
     }
     // small delay to respect rate limits
@@ -256,44 +256,20 @@ export async function scanOptionsFlowBatch(
   return results;
 }
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
+// ─── Unavailable Data ─────────────────────────────────────────────────────────
 
-export function getMockFlowSummary(symbol: string): StockFlowSummary {
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const bullish = seed % 3 !== 2;
-  const callCount = bullish ? (seed % 3) + 1 : 0;
-  const putCount  = bullish ? 0 : (seed % 2) + 1;
-
-  const alerts: OptionsFlowAlert[] = [];
-  for (let i = 0; i < callCount; i++) {
-    alerts.push({
-      symbol,
-      alertType: 'unusual_call',
-      strike:    Math.round((100 + seed % 100 + i * 10) / 5) * 5,
-      expiry:    new Date(Date.now() + (21 + i * 14) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      daysToExpiry: 21 + i * 14,
-      premium:   (seed % 10 + 1) * 50000,
-      volume:    (seed % 20 + 5) * 100,
-      openInterest: (seed % 10 + 1) * 50,
-      volumeOiRatio: 2.5 + i * 0.5,
-      impliedVolatility: 0.35 + i * 0.05,
-      sentiment: 'bullish',
-      notes: `${(seed % 20 + 5) * 100} contracts, ${21 + i * 14}DTE, $${((seed % 10 + 1) * 50)}K`,
-    });
-  }
-
-  const pcr = bullish ? 0.4 + (seed % 3) * 0.1 : 1.2 + (seed % 3) * 0.2;
+export function getUnavailableFlowSummary(symbol: string): StockFlowSummary {
   return {
     symbol,
-    flowScore:            computeFlowScore(alerts, pcr),
-    sentiment:            bullish ? 'bullish' : 'bearish',
-    unusualCallCount:     callCount,
-    unusualPutCount:      putCount,
-    putCallVolumeRatio:   pcr,
-    putCallOiRatio:       pcr * 0.9,
-    ivRank:               30 + (seed % 40),
-    ivPercentile:         35 + (seed % 35),
-    impliedMoveEarnings:  3 + (seed % 7),
-    alerts,
+    flowScore: 0,
+    sentiment: 'neutral',
+    unusualCallCount: 0,
+    unusualPutCount: 0,
+    putCallVolumeRatio: 0,
+    putCallOiRatio: 0,
+    ivRank: 0,
+    ivPercentile: 0,
+    impliedMoveEarnings: 0,
+    alerts: [],
   };
 }

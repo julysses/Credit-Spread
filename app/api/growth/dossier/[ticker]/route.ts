@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/database/db';
 import { intelligenceDossiers } from '@/database/schema';
 import { and, eq, desc } from 'drizzle-orm';
-import { getMockDossier } from '@/server/intelligence-dossier';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
@@ -26,12 +27,24 @@ export async function GET(
       .execute();
 
     if (rows.length === 0) {
-      // Return mock dossier for dev
-      return NextResponse.json({ ok: true, data: { dossier: getMockDossier(symbol), _mock: true } });
+      return NextResponse.json({
+        ok: true,
+        data: {
+          dossier: null,
+          symbol,
+          emptyReason: 'no_dossier_data',
+        },
+      });
     }
 
     return NextResponse.json({ ok: true, data: { dossier: rows[0] } });
-  } catch {
-    return NextResponse.json({ ok: true, data: { dossier: getMockDossier(symbol), _mock: true } });
+  } catch (err) {
+    console.error(`Growth dossier DB error (${symbol}):`, err);
+    return NextResponse.json({
+      ok: false,
+      code: 'DATA_UNAVAILABLE',
+      error: 'Growth dossier is unavailable. Check DATABASE_URL, migrations, and dossier generation.',
+      symbol,
+    }, { status: 503 });
   }
 }

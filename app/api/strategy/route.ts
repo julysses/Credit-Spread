@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData, type OptionChainEntry } from '@/server/market-data';
-import { analyzeNews, getMockNewsAnalysis } from '@/server/news-analyzer';
+import { fetchMarketSnapshot, type OptionChainEntry } from '@/server/market-data';
+import { analyzeNews } from '@/server/news-analyzer';
+import { marketSnapshotMissingSources } from '@/server/live-data';
 import { runStrategyEngine, assessRiskLevel, MarketConditions } from '@/lib/models/strategy-engine';
 import { classifyVIXRegime, computeVolatilitySkew, buildVolatilitySurface } from '@/lib/models/volatility';
-import { expectedMove } from '@/lib/models/black-scholes';
 import { buildDataQuality } from '@/lib/models/risk-controls';
 
 export const dynamic = 'force-dynamic';
@@ -11,27 +11,41 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const useMock = url.searchParams.get('mock') === 'true';
-
-    const snapshot = useMock ? getMockMarketData() : await fetchMarketSnapshot();
-    const hasNewsSource = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
-    const newsAnalysis = useMock || !hasNewsSource
-      ? getMockNewsAnalysis()
-      : await analyzeNews();
-
-    const { spx, vix } = snapshot;
-    const dataQuality = buildDataQuality(snapshot.sources ?? {}, useMock);
-    const impliedVol = vix.price / 100;
-
-    // Realized vol: use fetched 20-day HV when available; fall back to synthetic IV×0.85 estimate
-    const isSyntheticRV = !snapshot.realizedVol;
-    const realizedVol = snapshot.realizedVol ?? impliedVol * 0.85;
-    if (isSyntheticRV) {
-      dataQuality.warnings.push('REALIZEDVOL source is synthetic estimate (IV × 0.85)');
-      if (dataQuality.confidence === 'live') dataQuality.confidence = 'synthetic';
+    if (url.searchParams.get('mock') === 'true') {
+      return NextResponse.json({ success: false, code: 'MOCK_DISABLED', error: 'Mock strategy data is disabled in production.' }, { status: 400 });
     }
 
-    // Build surface from chain
+    const snapshot = await fetchMarketSnapshot();
+    const missingSources = marketSnapshotMissingSources(snapshot);
+    const hasNewsSource = process.env.GNEWS_API_KEY || process.env.NEWS_API_KEY || process.env.ALPHA_VANTAGE_API_KEY;
+    const newsAnalysis = hasNewsSource ? await analyzeNews() : {
+      items: [],
+      overallSentiment: 'neutral' as const,
+      overallScore: 0,
+      geopoliticalRiskLevel: 'low' as const,
+      macroRiskLevel: 'low' as const,
+      keyRisks: ['News source unavailable'],
+      tradeabilityScore: 50,
+    };
+
+    const { spx, vix } = snapshot;
+    const dataQuality = buildDataQuality(snapshot.sources ?? {});
+    const blockingMissingSources = missingSources.filter(source => source !== 'optionChain' || snapshot.providerMode === 'analytics_only');
+    if (blockingMissingSources.length > 0 || !snapshot.tradeable) {
+      dataQuality.confidence = 'unavailable';
+      dataQuality.tradeable = false;
+      dataQuality.missingSources = Array.from(new Set([...dataQuality.missingSources, ...blockingMissingSources]));
+      dataQuality.warnings.push(...blockingMissingSources.map(source => `${source.toUpperCase()} unavailable — trade recommendations blocked`));
+    } else {
+      dataQuality.tradeable = true;
+    }
+
+    const impliedVol = vix.price > 0 ? vix.price / 100 : 0;
+    const realizedVol = snapshot.realizedVol ?? 0;
+    if (!snapshot.realizedVol) {
+      dataQuality.warnings.push('REALIZEDVOL unavailable — trade recommendations blocked');
+    }
+
     const riskFreeRate = 0.05;
     const surfacePoints = snapshot.optionChain.length > 0
       ? buildVolatilitySurface(
@@ -53,23 +67,20 @@ export async function GET(req: NextRequest) {
       ? computeVolatilitySkew(surfacePoints, spx.price, 7)
       : null;
 
-    const vixRegime = classifyVIXRegime(vix.price);
+    const vixRegime = classifyVIXRegime(vix.price || 0);
     const dailyChangePct = spx.changePct || 0;
 
-    // Determine directional bias
     let directionalBias: 'bullish' | 'bearish' | 'neutral' = 'neutral';
     if (newsAnalysis.overallSentiment === 'bullish' && dailyChangePct > 0) directionalBias = 'bullish';
     else if (newsAnalysis.overallSentiment === 'bearish' || dailyChangePct < -0.5) directionalBias = 'bearish';
 
-    // Market regime
     let marketRegime: MarketConditions['marketRegime'] = 'range_bound';
     if (Math.abs(dailyChangePct) > 1.5) marketRegime = 'volatile';
     else if (dailyChangePct > 0.5) marketRegime = 'trending_up';
     else if (dailyChangePct < -0.5) marketRegime = 'trending_down';
     if (vix.price > 35) marketRegime = 'crisis';
 
-    // IV Rank synthetic
-    const ivRankValue = Math.min(100, Math.max(0, (vix.price - 12) / (40 - 12) * 100));
+    const ivRankValue = vix.price > 0 ? Math.min(100, Math.max(0, (vix.price - 12) / (40 - 12) * 100)) : 0;
 
     const conditions: MarketConditions = {
       spxPrice: spx.price,
@@ -93,17 +104,30 @@ export async function GET(req: NextRequest) {
       realizedVol,
       impliedVol,
       skew,
-      dataConfidence: dataQuality.confidence,
+      dataConfidence: dataQuality.tradeable ? dataQuality.confidence : 'unavailable',
       dataWarnings: dataQuality.warnings,
+      providerMode: snapshot.providerMode,
+      tradeInstrument: snapshot.tradeInstrument,
+      tradePrice: snapshot.tradeInstrument === 'SPY' ? snapshot.spy.price : snapshot.spx.price,
+      optionChainSource: snapshot.optionChainSource,
+      optionChain: snapshot.optionChain,
     };
 
     const decision = runStrategyEngine(conditions);
 
-    // ── Chain liquidity spot-check ──────────────────────────────────────────
-    // After computing the recommended strikes, validate them against actual
-    // chain data (bid-ask quality, open interest).  Append warnings to the
-    // decision object so the UI can surface them without blocking the trade.
+    if (!dataQuality.tradeable && decision.recommendation) {
+      decision.strategy = 'NO_TRADE';
+      decision.recommendation.tradeType = 'no_trade';
+      decision.recommendation.decisionStatus = 'data_invalid';
+      decision.recommendation.confidence = 'low';
+      decision.recommendation.warnings = Array.from(new Set([
+        ...(decision.recommendation.warnings ?? []),
+        ...dataQuality.warnings,
+      ]));
+    }
+
     if (
+      dataQuality.tradeable &&
       decision.recommendation &&
       decision.recommendation.tradeType !== 'no_trade' &&
       snapshot.optionChain.length > 0
@@ -121,22 +145,19 @@ export async function GET(req: NextRequest) {
         ];
       }
     }
-    // Chain liquidity label in dataQuality
+
     const chainLiqLabel = snapshot.sources?.optionChainLiquidity;
     if (chainLiqLabel === 'thin') {
       dataQuality.warnings.push('Option chain liquidity is thin — bid-ask spreads elevated');
     } else if (chainLiqLabel === 'missing') {
-      dataQuality.warnings.push('Option chain data missing — strike liquidity unverified');
+      dataQuality.warnings.push('Option chain data unavailable — strike liquidity unverified');
     }
-    // ───────────────────────────────────────────────────────────────────────
 
-    // If standing aside, attach the specific event that triggered it
     if (decision.recommendation?.tradeType === 'no_trade' && conditions.isMacroEventDay) {
       const macroEvent = detectMacroEvent(newsAnalysis);
       (decision.recommendation as unknown as Record<string, unknown>).noTradeEvent = macroEvent;
     }
 
-    // Import here to avoid circular
     const { generateMorningBrief } = await import('@/server/ai-briefing');
     const brief = await generateMorningBrief(snapshot, newsAnalysis, decision);
 
@@ -154,7 +175,17 @@ export async function GET(req: NextRequest) {
           spxLow: spx.low,
           spxOpen: spx.open,
         },
-        snapshot: { isMarketOpen: snapshot.isMarketOpen, sources: snapshot.sources, realizedVol: snapshot.realizedVol },
+        snapshot: {
+          isMarketOpen: snapshot.isMarketOpen,
+          sources: snapshot.sources,
+          realizedVol: snapshot.realizedVol,
+          providerMode: snapshot.providerMode,
+          tradeInstrument: snapshot.tradeInstrument,
+          tradeable: snapshot.tradeable,
+          assignmentRisk: snapshot.assignmentRisk,
+          taxTreatment: snapshot.taxTreatment,
+          optionChainSource: snapshot.optionChainSource,
+        },
         dataQuality,
       },
       timestamp: Date.now(),
@@ -212,15 +243,12 @@ function extractScheduledTime(text: string): string {
 }
 
 function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: string; url: string; source?: string; macroRelevance: boolean; geopoliticalRisk?: boolean; riskImpact: string }[]; keyRisks: string[] }): MacroEventInfo {
-  // Primary: items flagged as macro-relevant with high risk impact
   let triggerItems = newsAnalysis.items.filter(
     i => i.macroRelevance && i.riskImpact === 'high'
   );
-  // Fallback 1: any high-risk item (captures geopolitical triggers)
   if (triggerItems.length === 0) {
     triggerItems = newsAnalysis.items.filter(i => i.riskImpact === 'high');
   }
-  // Fallback 2: any macro-relevant or geopolitical item
   if (triggerItems.length === 0) {
     triggerItems = newsAnalysis.items.filter(i => i.macroRelevance || i.geopoliticalRisk);
   }
@@ -231,7 +259,6 @@ function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: st
     source: i.source,
   }));
 
-  // Detect event type from combined headlines + summaries
   const text = triggerItems
     .map(i => `${i.headline} ${i.summary}`)
     .join(' ')
@@ -256,10 +283,6 @@ function detectMacroEvent(newsAnalysis: { items: { headline: string; summary: st
   return { name, description, scheduledTime, sources };
 }
 
-/**
- * Spot-check liquidity at the short and long strike levels in the actual
- * option chain.  Returns human-readable warning strings — empty array if OK.
- */
 function checkStrikeLiquidity(
   chain: OptionChainEntry[],
   shortStrike: number | null,
@@ -271,7 +294,6 @@ function checkStrikeLiquidity(
   for (const strike of [shortStrike, longStrike]) {
     if (strike == null) continue;
 
-    // Find nearest chain entry within a 2.5-point window
     const entry = chain.reduce<OptionChainEntry | null>((best, e) => {
       const d = Math.abs(e.strike - strike);
       if (d > 2.5) return best;

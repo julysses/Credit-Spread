@@ -1,36 +1,39 @@
 import { NextResponse } from 'next/server';
 import { scoreAllIntradayStrategies } from '@/lib/models/intraday-engine';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshot } from '@/server/market-data';
+import { marketSnapshotMissingSources } from '@/server/live-data';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // Fetch live market data; fall back to mock if unavailable
-    let snap;
-    try {
-      snap = await fetchMarketSnapshot();
-      if (!snap || snap.spx.price <= 0) snap = getMockMarketData();
-    } catch {
-      snap = getMockMarketData();
+    const snap = await fetchMarketSnapshot();
+    const missingSources = marketSnapshotMissingSources(snap).filter(source => ['spx', 'vix'].includes(source));
+    if (missingSources.length > 0) {
+      return NextResponse.json({
+        success: false,
+        code: 'DATA_UNAVAILABLE',
+        feature: 'intraday-playbook',
+        message: `Intraday playbook requires live market inputs: ${missingSources.join(', ')}`,
+        missingSources,
+        sources: snap.sources,
+      }, { status: 503 });
     }
 
     const spxPrice = snap.spx.price;
     const vix      = snap.vix.price;
 
-    // Build intraday inputs with neutral/default technicals
-    // (the playbook uses market-structure signals; VWAP + RSI can be overridden later)
     const nowET = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const currentHourET    = nowET.getHours();
     const currentMinuteET  = nowET.getMinutes();
-    const marketCloseET    = 16 * 60;               // 4:00 PM
+    const marketCloseET    = 16 * 60;
     const nowMinutes       = currentHourET * 60 + currentMinuteET;
     const minutesRemaining = Math.max(0, marketCloseET - nowMinutes);
 
     const inputs = {
       spxPrice,
       vix,
-      vwap:             spxPrice,       // neutral: assume price = VWAP
+      vwap:             spxPrice,
       openingRangeHigh: spxPrice + spxPrice * 0.002,
       openingRangeLow:  spxPrice - spxPrice * 0.002,
       rsi5m:  50,
@@ -51,9 +54,10 @@ export async function GET() {
         marketOpen:       snap.isMarketOpen,
         minutesRemaining,
         strategies,
+        sources: snap.sources,
       },
     });
   } catch (err: unknown) {
-    return NextResponse.json({ success: false, error: String(err) }, { status: 500 });
+    return NextResponse.json({ success: false, code: 'DATA_UNAVAILABLE', error: String(err) }, { status: 503 });
   }
 }

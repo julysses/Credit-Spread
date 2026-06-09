@@ -4,29 +4,7 @@ import { useState, useEffect } from 'react';
 import { ScoreRing } from './ScoreRing';
 import { SignalBadge } from './SignalBadge';
 import { StockDossierModal } from './StockDossierModal';
-
-interface Candidate {
-  id: number;
-  symbol: string;
-  companyName?: string;
-  sector?: string;
-  compositeScore?: number;
-  momentumScore?: number;
-  growthScore?: number;
-  valueScore?: number;
-  institutionalScore?: number;
-  optionsFlowScore?: number;
-  price?: string;
-  priceChangePct?: string;
-  rsi?: string;
-  revenueGrowthPct?: string;
-  epsGrowthPct?: string;
-  pegRatio?: string;
-  above200sma?: boolean;
-  aiThesis?: string | null;
-  signals?: Record<string, unknown>;
-  marketCap?: number;
-}
+import { ageLabel, money, num, pct, politicianLabel, politicianTone, priceStatusLabel, type EnrichedGrowthCandidate as Candidate } from './card-utils';
 
 export function LongTermPanel() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -68,17 +46,21 @@ export function LongTermPanel() {
       )}
 
       {selected && (
-        <StockDossierModal candidate={selected} onClose={() => setSelected(null)} />
+        <StockDossierModal candidate={selected as any} onClose={() => setSelected(null)} />
       )}
     </div>
   );
 }
 
 function LongTermCard({ candidate: c, onClick }: { candidate: Candidate; onClick: () => void }) {
-  const priceChange = parseFloat(c.priceChangePct ?? '0');
-  const revGrowth   = parseFloat(c.revenueGrowthPct ?? '0');
-  const epsGrowth   = parseFloat(c.epsGrowthPct ?? '0');
-  const peg         = parseFloat(c.pegRatio ?? '0');
+  const currentPrice = c.currentPrice ?? c.price;
+  const priceChange = num(c.currentPriceChangePct ?? c.priceChangePct);
+  const revGrowth   = num(c.revenueGrowthPct);
+  const epsGrowth   = num(c.epsGrowthPct);
+  const peg         = num(c.pegRatio);
+  const entryReturn = c.entryReturnPct;
+  const pio = c.piotroskiScore != null ? num(c.piotroskiScore) : null;
+  const altman = c.altmanZScore != null ? num(c.altmanZScore) : null;
 
   return (
     <button
@@ -99,17 +81,35 @@ function LongTermCard({ candidate: c, onClick }: { candidate: Candidate; onClick
             <div className="text-[10px] text-gray-500 truncate mb-2">{c.companyName}</div>
           )}
 
-          <div className="flex items-baseline gap-2">
-            <span className="font-mono text-sm font-semibold text-gray-200">${c.price}</span>
-            <span className={`font-mono text-[10px] ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)}%
-            </span>
-            {c.marketCap && (
-              <span className="text-[9px] text-gray-600">${c.marketCap?.toFixed(0)}B</span>
-            )}
+          <div className="mt-3 rounded-lg border border-sd-line/50 bg-sd-muted/20 p-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[8px] text-gray-600 uppercase tracking-[0.14em]">Current</div>
+                <div className="font-mono text-base font-semibold text-gray-100">{money(currentPrice)}</div>
+                <div className={`font-mono text-[10px] ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-[8px] text-gray-600 uppercase tracking-[0.14em]">Entry / Signal</div>
+                <div className="font-mono text-base font-semibold text-gray-100">{money(c.entryPrice ?? c.scanPrice)}</div>
+                <div className={`font-mono text-[10px] ${num(entryReturn) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {pct(entryReturn)} from entry
+                </div>
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[9px] text-gray-500 font-mono">
+              <span>{priceStatusLabel(c)}</span>
+              <span>•</span>
+              <span>{ageLabel(c)}</span>
+              {c.marketCap && <><span>•</span><span>${c.marketCap.toFixed(0)}B mkt cap</span></>}
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            <SignalBadge label={pio != null ? `Piotroski ${pio}/9` : 'Piotroski —'} sentiment={pio != null && pio >= 7 ? 'bullish' : pio != null && pio < 5 ? 'bearish' : 'neutral'} />
+            <SignalBadge label={altman != null ? `Altman Z ${altman.toFixed(1)}` : 'Altman Z —'} sentiment={altman != null && altman > 3 ? 'bullish' : altman != null && altman < 1.8 ? 'bearish' : 'neutral'} />
+            <SignalBadge label={politicianLabel(c)} sentiment={politicianTone(c.politicianNetFlow)} />
             {revGrowth >= 15  && <SignalBadge label={`Rev +${revGrowth.toFixed(0)}%`} sentiment="bullish" />}
             {epsGrowth >= 20  && <SignalBadge label={`EPS +${epsGrowth.toFixed(0)}%`} sentiment="bullish" />}
             {peg > 0 && peg <= 2 && <SignalBadge label={`PEG ${peg.toFixed(1)}`} sentiment="bullish" />}

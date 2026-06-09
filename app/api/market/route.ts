@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchMarketSnapshot, getMockMarketData } from '@/server/market-data';
+import { fetchMarketSnapshot } from '@/server/market-data';
 import { buildVolatilitySurface, computeVolatilitySkew, classifyVIXRegime, ivRank } from '@/lib/models/volatility';
 import { expectedMove } from '@/lib/models/black-scholes';
 
