@@ -1,0 +1,12 @@
+risk_per_trade_pct: 0.005
+hard_max_risk_per_trade_pct: 0.01
+max_open_risk_pct: 0.025
+max_daily_drawdown_pct: 0.02
+max_sector_exposure_pct: 0.30
+max_notional_per_trade_pct: 0.20
+max_leveraged_etf_exposure_pct: 0.20
+block_first_n_minutes: 1
+block_last_n_minutes: 10
+max_spread_bps: 30
+liquidity_participation_cap: 0.02
+allow_multi_recommendation_per_symbol: false

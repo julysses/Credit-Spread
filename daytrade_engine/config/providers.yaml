@@ -1,0 +1,19 @@
+active_provider: yfinance
+fallback_providers:
+  - alpaca
+  - finnhub
+  - twelvedata
+  - alphavantage
+cache_path: ./data_cache
+use_cache: true
+providers:
+  yfinance:
+    enabled: true
+  alpaca:
+    enabled: false
+  finnhub:
+    enabled: false
+  twelvedata:
+    enabled: false
+  alphavantage:
+    enabled: false

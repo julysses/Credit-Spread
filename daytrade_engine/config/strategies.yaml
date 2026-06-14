@@ -1,0 +1,53 @@
+vwap_trend_continuation:
+  enabled: true
+  allowed_regimes: [TREND_UP, TREND_DOWN, BREAKOUT_EXPANSION]
+  min_rvol: 1.5
+  min_rs_intraday: 0.002
+  max_vwap_crosses: 2
+  max_extension_atr: 1.8
+  target_1_r: 1.0
+  target_2_r: 2.0
+opening_range_breakout:
+  enabled: true
+  allowed_regimes: [BREAKOUT_EXPANSION, TREND_UP, TREND_DOWN]
+  primary_or_minutes: 5
+  confirm_or_minutes: 15
+  min_breakout_volume_ratio: 1.8
+  min_rvol: 2.0
+  target_1_r: 1.0
+  target_2_r: 2.0
+relative_strength_leader:
+  enabled: true
+  allowed_regimes: [TREND_UP, TREND_DOWN, BREAKOUT_EXPANSION]
+  top_percentile_cutoff: 0.90
+  min_rvol: 1.5
+breakout_unusual_volume:
+  enabled: true
+  allowed_regimes: [BREAKOUT_EXPANSION, TREND_UP, TREND_DOWN]
+  min_volume_anomaly: 2.0
+pullback_to_vwap:
+  enabled: true
+  allowed_regimes: [TREND_UP, TREND_DOWN]
+  max_pullback_atr: 1.0
+  target_1_r: 1.5
+  target_2_r: 2.5
+mean_reversion_extension:
+  enabled: true
+  allowed_regimes: [MEAN_REVERTING, RANGE]
+  min_vwap_distance_zscore: 2.0
+  max_hold_minutes: 45
+gap_continuation_fade:
+  enabled: true
+  allowed_regimes: [BREAKOUT_EXPANSION, MEAN_REVERTING]
+  min_gap_pct: 0.75
+etf_pairs_relative_value:
+  enabled: true
+  allowed_regimes: [RANGE, MEAN_REVERTING]
+  min_correlation: 0.85
+  entry_spread_zscore: 2.0
+  approved_pairs:
+    - [SPY, IVV]
+    - [SMH, SOXX]
+    - [XLK, QQQ]
+    - [XLF, KRE]
+    - [XLF, KBE]
